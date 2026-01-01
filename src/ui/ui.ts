@@ -1,3 +1,11 @@
+export interface TradeItem {
+  id: string;
+  name: string;
+  count: number;
+  price: number;
+  basePrice: number;
+}
+
 export const ui = {
   dockingHint: document.getElementById('docking-hint')!,
   tradeMenu: document.getElementById('trade-menu')!,
@@ -11,7 +19,11 @@ export const ui = {
     else this.dockingHint.classList.add('hidden');
   },
 
-  showTradeMenu(show: boolean, stationName?: string, inventory?: Record<string, number>) {
+  showTradeMenu(
+    show: boolean,
+    stationName?: string,
+    inventory?: Record<string, number> | TradeItem[]
+  ) {
     if (show) {
       this.tradeMenu.classList.remove('hidden');
       if (stationName) {
@@ -34,15 +46,58 @@ export const ui = {
       }
 
       if (inventory && container) {
-        let listHtml =
-          '<div style="margin-top:10px;"><h3>Station Inventory</h3><ul style="list-style:none; padding:0;">';
-        for (const [item, count] of Object.entries(inventory)) {
-          listHtml += `<li style="margin-bottom:4px; border-bottom:1px solid #333; padding:4px; display:flex; justify-content:space-between;">
-                  <span>${item.toUpperCase()}</span>
-                  <span>${count.toFixed(0)}</span>
-              </li>`;
+        // inventory can be Record<string, number> OR detailed array.
+        // Let's assume we update call sites to pass the detailed array.
+        // But for safety/transition, check type.
+
+        let listHtml = '<div style="margin-top:10px;"><h3>Station Market</h3>';
+
+        if (Array.isArray(inventory)) {
+          // Detailed view
+          listHtml += `
+            <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+              <thead>
+                <tr style="text-align:left; border-bottom: 1px solid #555;">
+                  <th style="padding:4px;">Item</th>
+                  <th style="padding:4px; text-align:right;">Qty</th>
+                  <th style="padding:4px; text-align:right;">Price</th>
+                  <th style="padding:4px; text-align:right;">Base</th>
+                </tr>
+              </thead>
+              <tbody>
+           `;
+
+          for (const item of inventory) {
+            const priceClass =
+              item.price > item.basePrice
+                ? '#ffaa00'
+                : item.price < item.basePrice
+                  ? '#00ffaa'
+                  : '#ffffff';
+
+            listHtml += `
+               <tr style="border-bottom: 1px solid #333;">
+                 <td style="padding:4px;">${item.name}</td>
+                 <td style="padding:4px; text-align:right;">${item.count.toFixed(0)}</td>
+                 <td style="padding:4px; text-align:right; color:${priceClass};">$${item.price.toFixed(0)}</td>
+                 <td style="padding:4px; text-align:right; color:#888;">$${item.basePrice.toFixed(0)}</td>
+               </tr>
+             `;
+          }
+          listHtml += '</tbody></table>';
+        } else {
+          // Legacy/Fallback view
+          listHtml += '<ul style="list-style:none; padding:0;">';
+          for (const [item, count] of Object.entries(inventory)) {
+            listHtml += `<li style="margin-bottom:4px; border-bottom:1px solid #333; padding:4px; display:flex; justify-content:space-between;">
+                    <span>${item.toUpperCase()}</span>
+                    <span>${(count as number).toFixed(0)}</span>
+                </li>`;
+          }
+          listHtml += '</ul>';
         }
-        listHtml += '</ul></div>';
+
+        listHtml += '</div>';
         container.innerHTML = listHtml;
       }
     } else {

@@ -27,7 +27,7 @@ export const STATION_CONFIGS: Record<StationType, StationConfig> = {
       ],
       interval: 5000,
     },
-    initInventory: { food: 500, energy: 500, goods: 0, ore: 0 },
+    initInventory: { food: 500, energy: 500, goods: 0 },
   },
   mining: {
     type: 'mining',
@@ -39,7 +39,7 @@ export const STATION_CONFIGS: Record<StationType, StationConfig> = {
       produces: [{ itemId: 'ore', rate: 2 }],
       interval: 3000,
     },
-    initInventory: { food: 50, energy: 50, ore: 0, goods: 0 },
+    initInventory: { food: 50, energy: 50, ore: 0 },
   },
   factory: {
     type: 'factory',

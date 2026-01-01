@@ -10,6 +10,8 @@ import { overlaySystem } from '../ecs/systems/overlaySystem';
 import { renderSystem } from '../ecs/systems/renderSystem';
 import { gateSystem } from '../ecs/systems/gateSystem';
 import { STATION_CONFIGS, type StationType } from '../data/stations';
+import { ITEMS, type ItemId } from '../data/items';
+import { calculatePrice } from '../utils/economyUtils';
 import { ui } from '../ui/ui';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -220,7 +222,8 @@ export class MainScene extends Phaser.Scene {
         this.lastUiUpdate = time;
         // Don't re-set visible=true to avoid flickering if it resets scroll etc, checking if logic handles it.
         // ui.showTradeMenu updates content.
-        ui.showTradeMenu(true, undefined, this.currentStation.inventory as Record<string, number>);
+        const tradeData = this.getTradeData(this.currentStation);
+        ui.showTradeMenu(true, undefined, tradeData);
       }
 
       // Check for undock key
@@ -333,16 +336,36 @@ export class MainScene extends Phaser.Scene {
 
     ui.showDockingHint(false);
     // Pass station name and inventory to UI
-    ui.showTradeMenu(
-      true,
-      station.name || 'Unknown Station',
-      station.inventory as Record<string, number>
-    );
+    const tradeData = this.getTradeData(station);
+    ui.showTradeMenu(true, station.name || 'Unknown Station', tradeData);
   }
 
   undock() {
     this.isDocked = false;
     this.currentStation = null;
     ui.showTradeMenu(false);
+  }
+
+  getTradeData(station: Entity) {
+    if (!station.inventory) return [];
+
+    const data = [];
+    for (const [key, count] of Object.entries(station.inventory)) {
+      const itemId = key as ItemId;
+      const itemDef = ITEMS[itemId];
+      if (!itemDef) continue;
+
+      const price = calculatePrice(station, itemId);
+
+      data.push({
+        id: itemId,
+        name: itemDef.name,
+        count: count,
+        price: price,
+        basePrice: itemDef.basePrice,
+      });
+    }
+    // Sort by Name? Or predefined order?
+    return data;
   }
 }

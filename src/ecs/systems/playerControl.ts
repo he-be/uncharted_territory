@@ -6,8 +6,8 @@ export const playerControlSystem = (cursors: Phaser.Types.Input.Keyboard.CursorK
 
   if (!player) return;
 
-  const THRUST = 5; // Acceleration per frame
-  const MAX_SPEED = 300;
+  const THRUST = 8; // Acceleration per frame
+  const MAX_SPEED = 500;
   const ROTATION_SPEED = 3;
 
   if (cursors.left.isDown) {
