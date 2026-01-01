@@ -38,7 +38,7 @@ src/
 *   **MovementSystem:** 速度と慣性に基づいて位置を更新。
 *   **EconomySystem (Tick based):**
     *   **Production:** ステーションでの物資生産と消費。
-    *   **Decay:** 全EntityのCargo内の物資を時間経過で減らす。
+    *   **InventoryConsumption:** 全EntityのCargo内の物資を時間経過で消費する（自然減少）。
 *   **AiSystem:**
     *   NPCの意思決定（「あそこで高く売れるから移動しよう」）。
     *   パスファインディング（ゲート移動）。
@@ -52,7 +52,7 @@ src/
 ### 3.1 経済シミュレーションループ (The "Alive" Check)
 毎フレームではなく、`EconomyTick` (例: 1秒に1回) で更新する。
 
-1.  **Decay:** 全在庫の鮮度低下。0になったら消滅。
+1.  **InventoryConsumption:** 全在庫の自然減少。0になったら消滅。
 2.  **Production:** ステーションが資源を消費し、産品を生成。
 3.  **Price Update:** 各ステーションの在庫量に基づいて価格を変動させる（Dynamic Pricing）。
 
