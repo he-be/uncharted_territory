@@ -7,6 +7,8 @@ import { aiSystem } from '../ecs/systems/ai';
 import { npcSpawnerSystem } from '../ecs/systems/npcSpawner';
 import { economySystem } from '../ecs/systems/economy';
 import { overlaySystem } from '../ecs/systems/overlaySystem';
+import { renderSystem } from '../ecs/systems/renderSystem';
+import { gateSystem } from '../ecs/systems/gateSystem';
 import { STATION_CONFIGS, type StationType } from '../data/stations';
 import { ui } from '../ui/ui';
 import { v4 as uuidv4 } from 'uuid';
@@ -97,25 +99,65 @@ export class MainScene extends Phaser.Scene {
     };
     world.add(this.playerEntity);
 
-    // 4. Stations
-    this.createStation('station', 800, 600, 'Alpha Station (Trading)', 'trading');
-    this.createStation('station_factory', 1500, 1000, 'Beta Factory', 'factory');
-    this.createStation('station_mining', -400, 800, 'Gamma Mining Outpost', 'mining');
+    // 4. Stations & Sectors
+    const SECTOR_A = 'sector-a';
+    const SECTOR_B = 'sector-b';
 
-    // Camera
+    // Sector A: Production (Near 0,0)
+    this.createStation('station_mining', -400, 800, 'Gamma Mining (Sec A)', 'mining', SECTOR_A);
+    this.createStation('station_factory', 1500, 1000, 'Beta Factory (Sec A)', 'factory', SECTOR_A);
+    // Gate A at (4000, 0)
+    // Destination Gate ID: gate-b-entry
+    this.createGate(4000, 0, SECTOR_A, SECTOR_B, 'gate-b-entry', 'gate-a-exit');
+
+    // Sector B: Consumption market (Far away)
+    // Offset: 50,000
+    const OFFSET_B_X = 50000;
+    const OFFSET_B_Y = 0;
+
+    this.createStation(
+      'station',
+      OFFSET_B_X + 800,
+      OFFSET_B_Y + 600,
+      'Alpha Trading (Sec B)',
+      'trading',
+      SECTOR_B
+    );
+
+    // Gate B (Leads back to A)
+    // ID: gate-b-entry
+    // Destination: gate-a-exit
+    this.createGate(
+      OFFSET_B_X - 2000,
+      OFFSET_B_Y,
+      SECTOR_B,
+      SECTOR_A,
+      'gate-a-exit',
+      'gate-b-entry'
+    );
+
+    // Camera Init
     this.cameras.main.startFollow(playerSprite);
     this.cameras.main.setZoom(this.currentZoom);
+    this.cameras.main.setBounds(-100000, -100000, 200000, 200000); // Expand camera bounds
 
     // Debug HUD
     this.debugText = this.add.text(10, 10, '', { font: '16px monospace', color: '#00ff00' });
     this.debugText.setScrollFactor(0);
     this.debugText.setDepth(100);
 
-    // UI Events
-    ui.closeTradeBtn.addEventListener('click', () => this.undock());
+    // Player starts in A
+    this.playerEntity.sectorId = SECTOR_A;
   }
 
-  createStation(key: string, x: number, y: number, name: string, type: StationType) {
+  createStation(
+    key: string,
+    x: number,
+    y: number,
+    name: string,
+    type: StationType,
+    sectorId: string
+  ) {
     const sprite = this.add.sprite(x, y, key);
     sprite.setScale(0.5);
     sprite.setDepth(1);
@@ -135,6 +177,33 @@ export class MainScene extends Phaser.Scene {
       productionConfig: config.production,
       wallet: 10000,
       totalProfit: 0,
+      sectorId: sectorId,
+    });
+  }
+
+  createGate(
+    x: number,
+    y: number,
+    sectorId: string,
+    targetSectorId: string,
+    targetGateId: string,
+    myId: string
+  ) {
+    // Re-use station sprite but tinted blue for now, or use shape
+    const sprite = this.add.circle(x, y, 50, 0x00ffff, 0.5); // Larger, transparent
+    sprite.setDepth(1);
+
+    world.add({
+      id: myId,
+      transform: { x, y, rotation: 0 },
+      sprite: sprite,
+      interactionRadius: 100, // Trigger radius
+      name: `Gate to ${targetSectorId}`,
+      sectorId: sectorId,
+      gate: {
+        destinationSectorId: targetSectorId,
+        destinationGateId: targetGateId,
+      },
     });
   }
 
@@ -214,6 +283,10 @@ export class MainScene extends Phaser.Scene {
     if (dockableStation && Phaser.Input.Keyboard.JustDown(this.keyE)) {
       this.dock(dockableStation);
     }
+
+    // Phase 4: Gate & Render Systems
+    gateSystem(this.playerEntity);
+    renderSystem(this.playerEntity);
 
     const totalFrameTime = performance.now() - frameStart;
     if (totalFrameTime > 33) {

@@ -4,10 +4,12 @@ import { STATION_CONFIGS, type StationType } from '../../data/stations';
 import type { ItemId } from '../../data/items';
 
 const ARRIVAL_RADIUS = 50;
+const JUMP_TIME_PENALTY = 5000; // Simulated time cost for jumping (effectively distance)
 
-// OPTIMIZATION: Cache Station Entity lookups
 // Key: StationID, Value: Entity
 const stationCache = new Map<string, Entity>();
+// Key: SectorID, Value: List of Gates in that sector
+const gateCache = new Map<string, Entity[]>();
 
 export const aiSystem = (_delta: number) => {
   const aiEntities = world.with(
@@ -16,12 +18,13 @@ export const aiSystem = (_delta: number) => {
     'aiState',
     'speedStats',
     'wallet',
-    'totalProfit'
+    'totalProfit',
+    'sectorId'
   );
-  const stations = world.with('station', 'transform', 'stationType', 'inventory');
+  const stations = world.with('station', 'transform', 'stationType', 'inventory', 'sectorId');
+  const gates = world.with('gate', 'transform', 'sectorId');
 
-  // Update Cache if size mismatch (Basic invalidation strategy)
-  // For a real game, handles removal properly. Here stations are static.
+  // Update Station Cache
   if (stationCache.size !== stations.size) {
     stationCache.clear();
     for (const s of stations) {
@@ -29,22 +32,81 @@ export const aiSystem = (_delta: number) => {
     }
   }
 
-  // Optimization: Throttle Planning
+  // Update Gate Cache
+  if (gateCache.size === 0 && gates.size > 0) {
+    gateCache.clear();
+    for (const g of gates) {
+      if (!g.sectorId) continue;
+      const list = gateCache.get(g.sectorId) || [];
+      list.push(g);
+      gateCache.set(g.sectorId, list);
+    }
+  }
+
+  // Helper: Calculate Time to Travel
+  const getTimeToTravel = (from: Entity, to: Entity, maxSpeed: number): number | null => {
+    if (!from.sectorId || !to.sectorId || !from.transform || !to.transform) return null;
+
+    if (from.sectorId === to.sectorId) {
+      const dist =
+        typeof Phaser !== 'undefined'
+          ? Phaser.Math.Distance.Between(
+              from.transform.x,
+              from.transform.y,
+              to.transform.x,
+              to.transform.y
+            )
+          : Math.sqrt(
+              Math.pow(from.transform.x - to.transform.x, 2) +
+                Math.pow(from.transform.y - to.transform.y, 2)
+            );
+      return dist / maxSpeed;
+    } else {
+      // Multi-sector
+      const sectorGates = gateCache.get(from.sectorId);
+      if (!sectorGates) {
+        return null;
+      }
+
+      const validGate = sectorGates.find((g) => g.gate?.destinationSectorId === to.sectorId);
+      if (!validGate || !validGate.transform) {
+        return null;
+      }
+
+      const distToGate =
+        typeof Phaser !== 'undefined'
+          ? Phaser.Math.Distance.Between(
+              from.transform.x,
+              from.transform.y,
+              validGate.transform.x,
+              validGate.transform.y
+            )
+          : Math.sqrt(
+              Math.pow(from.transform.x - validGate.transform.x, 2) +
+                Math.pow(from.transform.y - validGate.transform.y, 2)
+            );
+
+      return distToGate / maxSpeed + JUMP_TIME_PENALTY / maxSpeed;
+    }
+  };
+
+  // Optimization: Throttle Planning - one entity per frame? Or one batch?
+  // For now, simple flag to limit planning to ONE entity per frame to spread load
   let processedPlanning = false;
 
-  // Profiling Accumulators
+  const startTotal = performance.now();
   let tPlanning = 0;
   let tExec = 0;
-  let tWhere = 0;
-  const startTotal = performance.now();
 
   for (const entity of aiEntities) {
+    if (!entity.speedStats) continue;
+    const maxSpeed = entity.speedStats.maxSpeed;
+
     // ----------------------------------------------------
     // PLAN
     // ----------------------------------------------------
     if (entity.aiState === 'PLANNING') {
       if (processedPlanning) continue;
-      processedPlanning = true;
 
       const tPStart = performance.now();
       const possibleRoutes: Array<{
@@ -63,7 +125,6 @@ export const aiSystem = (_delta: number) => {
 
         for (const production of pConfig.production.produces) {
           const itemId = production.itemId;
-          // Check stock at producer
           const stock = producer.inventory?.[itemId] || 0;
           if (stock <= 0) continue;
 
@@ -77,39 +138,38 @@ export const aiSystem = (_delta: number) => {
               const sellPrice = calculatePrice(consumer, itemId);
               const profitPerUnit = sellPrice - buyPrice;
               if (profitPerUnit > 0) {
-                const distToProducer = Phaser.Math.Distance.Between(
-                  entity.transform.x,
-                  entity.transform.y,
-                  producer.transform.x,
-                  producer.transform.y
-                );
-                const distToConsumer = Phaser.Math.Distance.Between(
-                  producer.transform.x,
-                  producer.transform.y,
-                  consumer.transform.x,
-                  consumer.transform.y
-                );
-                const totalDist = distToProducer + distToConsumer;
-                const time = totalDist / entity.speedStats.maxSpeed;
-                const cargoCapacity = 10;
-                const totalProfit = profitPerUnit * cargoCapacity;
-                const score = totalProfit / (time + 1);
+                // Fix: Pass maxSpeed instead of 'entity' (which might be the producer station)
+                const timeToProducer = getTimeToTravel(entity, producer, maxSpeed);
+                const timeToConsumer = getTimeToTravel(producer, consumer, maxSpeed);
 
-                possibleRoutes.push({
-                  buyStationId: producer.id,
-                  sellStationId: consumer.id,
-                  itemId: itemId,
-                  score: score,
-                  expectedProfit: totalProfit,
-                });
+                if (timeToProducer !== null && timeToConsumer !== null) {
+                  const totalTime = timeToProducer + timeToConsumer;
+                  const cargoCapacity = 10; // Assume constant for now
+                  const totalProfit = profitPerUnit * cargoCapacity;
+                  const score = totalProfit / (totalTime + 1); // Avoid div 0
+
+                  possibleRoutes.push({
+                    buyStationId: producer.id,
+                    sellStationId: consumer.id,
+                    itemId: itemId,
+                    score: score,
+                    expectedProfit: totalProfit,
+                  });
+                }
               }
             }
           }
         }
       }
 
+      // Select best route
       if (possibleRoutes.length > 0) {
+        processedPlanning = true; // Mark as planned this frame
+
+        // Sort by score descending
         possibleRoutes.sort((a, b) => b.score - a.score);
+
+        // Randomly pick from top 3 to add variety
         const candidates = possibleRoutes.slice(0, 3);
         const chosenRoute = candidates[Math.floor(Math.random() * candidates.length)];
 
@@ -134,24 +194,36 @@ export const aiSystem = (_delta: number) => {
       let targetId = '';
       if (route.state === 'MOVING_TO_BUY' || route.state === 'BUYING') {
         targetId = route.buyStationId;
-      } else {
+      } else if (route.state === 'MOVING_TO_SELL' || route.state === 'SELLING') {
         targetId = route.sellStationId;
       }
 
-      // OPTIMIZED LOOKUP
-      const tW0 = performance.now();
-      const targetStation = stationCache.get(targetId); // O(1) Lookup
-      tWhere += performance.now() - tW0;
+      // --- Multi-Sector Logic ---
+      let targetEntity = stationCache.get(targetId);
 
-      if (!targetStation || !targetStation.transform) {
+      // If target is in different sector, override target to GATE
+      if (targetEntity && targetEntity.sectorId !== entity.sectorId) {
+        const sectorGates = gateCache.get(entity.sectorId || '');
+        const validGate = sectorGates?.find(
+          (g) => g.gate?.destinationSectorId === targetEntity!.sectorId
+        );
+
+        if (validGate) {
+          targetId = validGate.id; // Override target ID for lookup
+          targetEntity = validGate;
+        }
+      }
+
+      if (!targetEntity || !targetEntity.transform) {
+        // Fail gracefully
         entity.aiState = 'PLANNING';
         entity.tradeRoute = undefined;
         tExec += performance.now() - tEStart;
         continue;
       }
 
-      const targetX = targetStation.transform.x;
-      const targetY = targetStation.transform.y;
+      const targetX = targetEntity.transform.x;
+      const targetY = targetEntity.transform.y;
 
       const dx = targetX - entity.transform.x;
       const dy = targetY - entity.transform.y;
@@ -159,26 +231,57 @@ export const aiSystem = (_delta: number) => {
 
       const angle = Math.atan2(dy, dx);
       entity.transform.rotation = angle;
-      entity.velocity.vx = Math.cos(angle) * entity.speedStats.maxSpeed;
-      entity.velocity.vy = Math.sin(angle) * entity.speedStats.maxSpeed;
+      entity.velocity.vx = Math.cos(angle) * maxSpeed;
+      entity.velocity.vy = Math.sin(angle) * maxSpeed;
 
+      // Arrival Logic
       if (dist < ARRIVAL_RADIUS) {
         entity.velocity.vx = 0;
         entity.velocity.vy = 0;
 
+        // Handle Gate Jump
+        if (targetEntity.gate) {
+          // JUMP!
+          const destSector = targetEntity.gate.destinationSectorId;
+          const destGateId = targetEntity.gate.destinationGateId;
+
+          entity.sectorId = destSector;
+
+          // Find Destination Gate
+          let destGateEntity: Entity | null = null;
+          const potentialGates = gateCache.get(destSector);
+          if (potentialGates) {
+            destGateEntity = potentialGates.find((g) => g.id === destGateId) || null;
+          }
+
+          if (destGateEntity && destGateEntity.transform) {
+            entity.transform.x = destGateEntity.transform.x + 100;
+            entity.transform.y = destGateEntity.transform.y + 100;
+          } else {
+            // Fallback if not found (shouldn't happen with correct config)
+            entity.transform.x = 50000;
+            entity.transform.y = 0;
+          }
+
+          tExec += performance.now() - tEStart;
+          continue;
+        }
+
+        // Handle Trade
         if (route.state === 'MOVING_TO_BUY') {
-          const buyPrice = calculatePrice(targetStation, route.itemId);
+          // ... (Trade Logic) ...
+          const buyPrice = calculatePrice(targetEntity, route.itemId);
           const amount = 10;
           const cost = buyPrice * amount;
 
           if (
             (entity.wallet || 0) >= cost &&
-            (targetStation.inventory?.[route.itemId] || 0) >= amount
+            (targetEntity.inventory?.[route.itemId] || 0) >= amount
           ) {
             entity.wallet! -= cost;
-            targetStation.inventory![route.itemId]! -= amount;
-            if (targetStation.wallet === undefined) targetStation.wallet = 0;
-            targetStation.wallet += cost;
+            targetEntity.inventory![route.itemId]! -= amount;
+            if (targetEntity.wallet === undefined) targetEntity.wallet = 0;
+            targetEntity.wallet += cost;
 
             if (!entity.cargo) entity.cargo = {};
             if (!entity.cargo[route.itemId]) entity.cargo[route.itemId] = 0;
@@ -191,16 +294,16 @@ export const aiSystem = (_delta: number) => {
             entity.tradeRoute = undefined;
           }
         } else if (route.state === 'MOVING_TO_SELL') {
-          const sellPrice = calculatePrice(targetStation, route.itemId);
+          const sellPrice = calculatePrice(targetEntity, route.itemId);
           const amount = entity.cargo?.[route.itemId] || 0;
           const revenue = sellPrice * amount;
 
           if (amount > 0) {
             entity.wallet! += revenue;
-            if (targetStation.wallet === undefined) targetStation.wallet = 0;
-            targetStation.wallet -= revenue;
-            if (!targetStation.inventory![route.itemId]) targetStation.inventory![route.itemId] = 0;
-            targetStation.inventory![route.itemId]! += amount;
+            if (targetEntity.wallet === undefined) targetEntity.wallet = 0;
+            targetEntity.wallet -= revenue;
+            if (!targetEntity.inventory![route.itemId]) targetEntity.inventory![route.itemId] = 0;
+            targetEntity.inventory![route.itemId]! += amount;
             entity.cargo![route.itemId] = 0;
             if (entity.totalProfit === undefined) entity.totalProfit = 0;
             entity.totalProfit += revenue;
@@ -213,10 +316,7 @@ export const aiSystem = (_delta: number) => {
   }
 
   const totalTime = performance.now() - startTotal;
-  // Log if slow, showing breakdown
   if (totalTime > 4) {
-    console.warn(
-      `[AI PERF] Total: ${totalTime.toFixed(2)}ms | Plan: ${tPlanning.toFixed(2)} | Exec: ${tExec.toFixed(2)} | Where: ${tWhere.toFixed(2)}`
-    );
+    // console.warn(`[AI PERF] Total: ${totalTime.toFixed(2)}ms | Plan: ${tPlanning.toFixed(2)} | Exec: ${tExec.toFixed(2)}`);
   }
 };

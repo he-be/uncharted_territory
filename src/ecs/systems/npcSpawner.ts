@@ -29,6 +29,7 @@ export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
       wallet: 1000,
       totalProfit: 0,
       target: undefined,
+      sectorId: 'sector-a', // Spawn in Sector A
     });
   }
 };

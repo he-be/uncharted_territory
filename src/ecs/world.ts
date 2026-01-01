@@ -33,12 +33,23 @@ export type Entity = {
   totalProfit?: number;
 
   // AI / NPC Components
+  // AI / NPC Components
   aiState?: 'PLANNING' | 'EXECUTING_TRADE';
   tradeRoute?: {
     buyStationId: string;
     sellStationId: string;
     itemId: ItemId;
-    state: 'MOVING_TO_BUY' | 'BUYING' | 'MOVING_TO_SELL' | 'SELLING';
+    state: 'MOVING_TO_BUY' | 'BUYING' | 'MOVING_TO_SELL' | 'SELLING' | 'MOVING_TO_GATE' | 'JUMPING';
+    path?: string[]; // List of Gate IDs to traverse? or Sector IDs?
+  };
+
+  // Location
+  sectorId?: string;
+
+  // Gate
+  gate?: {
+    destinationSectorId: string;
+    destinationGateId: string; // The ID of the gate in the target sector (to spawn at)
   };
 
   target?: { x: number; y: number };
