@@ -16,6 +16,12 @@ export type Entity = {
   playerControl?: boolean;
   station?: boolean;
   interactionRadius?: number;
+  name?: string; // Station Name
+
+  // AI / NPC Components
+  aiState?: 'IDLE' | 'MOVING' | 'DOCKING';
+  target?: { x: number; y: number };
+  speedStats?: { maxSpeed: number; acceleration: number };
 };
 
 export const world = new World<Entity>();
