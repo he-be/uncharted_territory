@@ -6,6 +6,8 @@ const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: window.innerWidth,
   height: window.innerHeight,
+  // @ts-expect-error Phaser type definition is missing 'resolution' property
+  resolution: 1, // Force 1:1 pixel mapping (Fix for Retina 30fps)
   physics: {
     default: 'arcade',
     arcade: {

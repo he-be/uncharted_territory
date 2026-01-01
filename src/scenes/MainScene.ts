@@ -99,8 +99,8 @@ export class MainScene extends Phaser.Scene {
 
     // 4. Stations
     this.createStation('station', 800, 600, 'Alpha Station (Trading)', 'trading');
-    this.createStation('station_factory', 2000, 1000, 'Beta Factory', 'factory');
-    this.createStation('station_mining', -1000, 500, 'Gamma Mining Outpost', 'mining');
+    this.createStation('station_factory', 1500, 1000, 'Beta Factory', 'factory');
+    this.createStation('station_mining', -400, 800, 'Gamma Mining Outpost', 'mining');
 
     // Camera
     this.cameras.main.startFollow(playerSprite);
@@ -139,6 +139,8 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    const frameStart = performance.now();
+
     if (this.keyZ.isDown) this.adjustZoom(this.ZOOM_SPEED * 0.5);
     if (this.keyX.isDown) this.adjustZoom(-this.ZOOM_SPEED * 0.5);
 
@@ -157,8 +159,7 @@ export class MainScene extends Phaser.Scene {
         this.undock();
       }
     } else {
-      // Only control player and move entities if NOT docked (or maybe entities always move?)
-      // Actually, standard game behavior: World keeps moving. Player is just pinned.
+      // Only control player and move entities if NOT docked
       playerControlSystem(this.cursors);
     }
 
@@ -167,13 +168,20 @@ export class MainScene extends Phaser.Scene {
 
     // NPC Systems
     npcSpawnerSystem(this, delta);
+
+    const aiStart = performance.now();
     aiSystem(delta);
+    const aiTime = performance.now() - aiStart;
 
     // Economy System
+    const ecoStart = performance.now();
     economySystem(time, delta);
+    const ecoTime = performance.now() - ecoStart;
 
     // UI/Overlay
+    const ovStart = performance.now();
     overlaySystem(this);
+    const ovTime = performance.now() - ovStart;
 
     // Update Trail
     if (this.playerEntity.transform) {
@@ -207,12 +215,25 @@ export class MainScene extends Phaser.Scene {
       this.dock(dockableStation);
     }
 
+    const totalFrameTime = performance.now() - frameStart;
+    if (totalFrameTime > 33) {
+      console.warn(
+        `Long Frame: ${totalFrameTime.toFixed(2)}ms | AI: ${aiTime.toFixed(2)} | Eco: ${ecoTime.toFixed(2)} | Ov: ${ovTime.toFixed(2)}`
+      );
+    }
+
     if (this.playerEntity.transform && this.playerEntity.velocity) {
       const { x, y } = this.playerEntity.transform;
       const { vx, vy } = this.playerEntity.velocity;
       this.debugText.setText([
-        `Pos: (${x.toFixed(1)}, ${y.toFixed(1)})`,
-        `Vel: (${vx.toFixed(1)}, ${vy.toFixed(1)})`,
+        `FPS: ${this.game.loop.actualFps.toFixed(1)}`,
+        `Frame: ${totalFrameTime.toFixed(2)}ms`,
+        `AI: ${aiTime.toFixed(2)}ms`,
+        `Eco: ${ecoTime.toFixed(2)}ms`,
+        `Ov: ${ovTime.toFixed(2)}ms`,
+        ``,
+        `Pos: (${x.toFixed(0)}, ${y.toFixed(0)})`,
+        `Vel: (${vx.toFixed(0)}, ${vy.toFixed(0)})`,
         `Zoom: ${this.currentZoom.toFixed(2)}`,
       ]);
     }
