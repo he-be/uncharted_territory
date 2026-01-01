@@ -22,8 +22,8 @@ export const STATION_CONFIGS: Record<StationType, StationConfig> = {
     production: {
       consumes: [{ itemId: 'goods', rate: 1 }],
       produces: [
-        { itemId: 'food', rate: 5 },
-        { itemId: 'energy', rate: 5 },
+        { itemId: 'food', rate: 10 },
+        { itemId: 'energy', rate: 10 },
       ],
       interval: 5000,
     },

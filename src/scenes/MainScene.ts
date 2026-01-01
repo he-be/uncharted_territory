@@ -141,6 +141,14 @@ export class MainScene extends Phaser.Scene {
 
     // If docked, we only skip player movement/control updates
     if (this.isDocked) {
+      // Periodic UI Update (every 500ms)
+      if (time - this.lastUiUpdate > 500 && this.currentStation && this.currentStation.inventory) {
+        this.lastUiUpdate = time;
+        // Don't re-set visible=true to avoid flickering if it resets scroll etc, checking if logic handles it.
+        // ui.showTradeMenu updates content.
+        ui.showTradeMenu(true, undefined, this.currentStation.inventory as Record<string, number>);
+      }
+
       // Check for undock key
       if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
         this.undock();
@@ -211,8 +219,12 @@ export class MainScene extends Phaser.Scene {
     this.cameras.main.setZoom(this.currentZoom);
   }
 
+  private currentStation: Entity | null = null;
+  private lastUiUpdate = 0;
+
   dock(station: Entity) {
     this.isDocked = true;
+    this.currentStation = station;
 
     if (this.playerEntity.velocity) {
       this.playerEntity.velocity.vx = 0;
@@ -230,6 +242,7 @@ export class MainScene extends Phaser.Scene {
 
   undock() {
     this.isDocked = false;
+    this.currentStation = null;
     ui.showTradeMenu(false);
   }
 }

@@ -27,9 +27,13 @@ export type Entity = {
   productionConfig?: ProductionRule;
   lastProductionTick?: number;
 
+  // NPC Economy
+  cargo?: Partial<Record<ItemId, number>>;
+
   // AI / NPC Components
-  aiState?: 'IDLE' | 'MOVING' | 'DOCKING';
+  aiState?: 'IDLE' | 'MOVING' | 'DOCKING' | 'TRADING_BUY' | 'TRADING_SELL';
   target?: { x: number; y: number };
+  targetStationId?: string; // ID of the station
   speedStats?: { maxSpeed: number; acceleration: number };
 };
 
