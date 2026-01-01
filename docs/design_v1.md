@@ -6,6 +6,7 @@
 経済シミュレーション等の重い処理は将来的にWeb Workerへ移行可能な設計にしますが、Phase 1ではメインスレッドでの実装を優先し、シンプルさを保ちます。
 
 ### 1.1 ディレクトリ構造案
+
 ```
 src/
   ├── core/           # ゲームループ、基本クラス
@@ -22,34 +23,37 @@ src/
 ## 2. データモデル & ECS設計
 
 ### 2.1 主要コンポーネント (Components)
+
 エンティティの特性を定義するデータのみのクラス/インターフェース。
 
-*   **Transform:** `x, y, rotation` (グローバル座標)
-*   **Velocity:** `vx, vy` (物理移動用)
-*   **Cargo:** `items: { [itemId: string]: number }`, `capacity: number`
-*   **Wallet:** `credits: number`
-*   **AiBehavior:** `state: 'IDLE' | 'TRADING' | 'COMBAT'`, `targetSectorId: string`
-*   **CombatStats:** `hp`, `maxHp`, `shields`, `energy`
-*   **SectorInfo:** (ステーション/惑星用) `sectorId`, `productionRate`
+- **Transform:** `x, y, rotation` (グローバル座標)
+- **Velocity:** `vx, vy` (物理移動用)
+- **Cargo:** `items: { [itemId: string]: number }`, `capacity: number`
+- **Wallet:** `credits: number`
+- **AiBehavior:** `state: 'IDLE' | 'TRADING' | 'COMBAT'`, `targetSectorId: string`
+- **CombatStats:** `hp`, `maxHp`, `shields`, `energy`
+- **SectorInfo:** (ステーション/惑星用) `sectorId`, `productionRate`
 
 ### 2.2 主要システム (Systems)
+
 ロジックを担当。毎フレーム、対象のComponentを持つEntityを処理する。
 
-*   **MovementSystem:** 速度と慣性に基づいて位置を更新。
-*   **EconomySystem (Tick based):**
-    *   **Production:** ステーションでの物資生産と消費。
-    *   **InventoryConsumption:** 全EntityのCargo内の物資を時間経過で消費する（自然減少）。
-*   **AiSystem:**
-    *   NPCの意思決定（「あそこで高く売れるから移動しよう」）。
-    *   パスファインディング（ゲート移動）。
-*   **CombatSystem:**
-    *   戦闘状態の管理、ダメージ計算、破壊処理。
+- **MovementSystem:** 速度と慣性に基づいて位置を更新。
+- **EconomySystem (Tick based):**
+  - **Production:** ステーションでの物資生産と消費。
+  - **InventoryConsumption:** 全EntityのCargo内の物資を時間経過で消費する（自然減少）。
+- **AiSystem:**
+  - NPCの意思決定（「あそこで高く売れるから移動しよう」）。
+  - パスファインディング（ゲート移動）。
+- **CombatSystem:**
+  - 戦闘状態の管理、ダメージ計算、破壊処理。
 
 ---
 
 ## 3. ゲームループ詳細
 
 ### 3.1 経済シミュレーションループ (The "Alive" Check)
+
 毎フレームではなく、`EconomyTick` (例: 1秒に1回) で更新する。
 
 1.  **InventoryConsumption:** 全在庫の自然減少。0になったら消滅。
@@ -57,42 +61,71 @@ src/
 3.  **Price Update:** 各ステーションの在庫量に基づいて価格を変動させる（Dynamic Pricing）。
 
 ### 3.2 戦闘ループ (FTL Style)
+
 メインの航行とは異なるモード（またはオーバーレイ）として実装。
 
-*   **State:**
-    *   `Charging`: 武器チャージ中。
-    *   `Firing`: 攻撃実行。
-    *   `Cooldown`: 待機時間。
-*   **Energy Management:**
-    *   プレイヤーは限られた「リアクター出力」を各システム（Shield, Weapon, Engine）に配分する単純な整数管理。
+- **State:**
+  - `Charging`: 武器チャージ中。
+  - `Firing`: 攻撃実行。
+  - `Cooldown`: 待機時間。
+- **Energy Management:**
+  - プレイヤーは限られた「リアクター出力」を各システム（Shield, Weapon, Engine）に配分する単純な整数管理。
 
 ---
 
 ## 4. クラス設計 (Core)
 
 ### `GameManager` (Singleton)
-*   ゲーム全体の状態管理（Paused, Running）。
-*   セーブ/ロードの統括。
-*   各Systemの初期化と更新呼び出し。
+
+- ゲーム全体の状態管理（Paused, Running）。
+- セーブ/ロードの統括。
+- 各Systemの初期化と更新呼び出し。
 
 ### `Universe`
-*   セクターグラフの保持。
-*   全Entityの管理（ECSのWorld相当）。
+
+- セクターグラフの保持。
+- 全Entityの管理（ECSのWorld相当）。
 
 ### `Sector`
-*   ローカル空間の管理。
-*   プレイヤーが現在いるSectorのみ詳細描画し、他は抽象シミュレーション（座標計算のみ or グラフ上の移動のみ）とする "LOD" の基盤。
-    *   *Phase 1では全宇宙をメモリに乗せるが、描画コストのみ最適化する方針。*
+
+- ローカル空間の管理。
+- プレイヤーが現在いるSectorのみ詳細描画し、他は抽象シミュレーション（座標計算のみ or グラフ上の移動のみ）とする "LOD" の基盤。
+  - _Phase 1では全宇宙をメモリに乗せるが、描画コストのみ最適化する方針。_
 
 ---
 
 ## 5. UI/UX 実装方針
 
 ### Phaser vs DOM
+
 複雑なメニューやテキスト量の多い画面（取引画面、インベントリ）は、PhaserのCanvas内描画よりも **HTML/CSS Overlay** の方が開発効率とアクセシビリティが良い。
 
-*   **Map/Combat:** Phaser (Canvas)
-*   **Menu/Dialogue/Trade:** HTML Overlay (Absolute positioning on top of Canvas)
+- **Map/Combat:** Phaser (Canvas)
+- **Menu/Dialogue/Trade:** HTML Overlay (Absolute positioning on top of Canvas)
+
+### 5.1 ステーション相互作用とUI (Station Interaction)
+
+Phase 1 Step 1〜2における「ステーションとのドッキング・取引」のUX設計は以下の通り。
+
+1.  **ステーション配置 (Station Placement):**
+    - 宇宙空間に固定座標で配置されるEntity。
+    - 衝突判定はあるが、弾き飛ばされない特別なPhysics Body (Static) を持つ。
+    - 一定半径（例: 200px）の「通信圏 (Interaction Zone)」を持つ。
+
+2.  **ドッキングプロセス (Docking Flow):**
+    - **接近:** プレイヤーが通信圏に入ると、画面下部に操作ガイド「**[E] DOCKING REQUEST**」を表示（ダイエジェティックUIまたはHUD）。
+    - **実行:** [E]キー押下でドッキング承認。
+    - **遷移:**
+      - 船の操作をロック (Input disabled)。
+      - 船の物理速度を強制的にゼロにする。
+      - **Trade UI (HTML Overlay)** をフェードイン表示。
+
+3.  **取引UI設計 (Trade UI):**
+    - 全画面、または画面中央80%を覆うモーダル。
+    - **Left Panel (Ship Cargo):** プレイヤーの積荷一覧。
+    - **Right Panel (Station Market):** ステーションの販売/買取リスト。
+      - 各アイテムには「現在の価格」「在庫変動（需要/供給）」を表示。
+    - **Center/Bottom:** スライダーバーで個数指定 → [BUY] / [SELL] ボタン。
 
 ---
 

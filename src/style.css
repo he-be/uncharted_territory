@@ -1,0 +1,65 @@
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000;
+  overflow: hidden;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+#ui-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Let clicks pass through to canvas by default */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+#docking-hint {
+  position: absolute;
+  bottom: 100px;
+  background: rgba(0, 255, 0, 0.2);
+  border: 1px solid #0f0;
+  color: #0f0;
+  padding: 10px 20px;
+  font-size: 20px;
+  font-weight: bold;
+  pointer-events: auto;
+}
+
+#trade-menu {
+  background: rgba(0, 20, 40, 0.9);
+  border: 2px solid #0ff;
+  color: #0ff;
+  padding: 20px;
+  width: 600px;
+  height: 400px;
+  pointer-events: auto;
+  /* Catch clicks */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hidden {
+  display: none !important;
+}
+
+button {
+  background: #000;
+  border: 1px solid #0ff;
+  color: #0ff;
+  padding: 10px 20px;
+  cursor: pointer;
+  margin-top: 20px;
+}
+
+button:hover {
+  background: #0ff;
+  color: #000;
+}
