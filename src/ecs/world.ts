@@ -1,5 +1,7 @@
 import { World } from 'miniplex';
 import Phaser from 'phaser';
+import type { ItemId } from '../data/items';
+import type { StationType, ProductionRule } from '../data/stations';
 
 export type Entity = {
   id: string; // UUID
@@ -14,9 +16,16 @@ export type Entity = {
   };
   sprite?: Phaser.GameObjects.Sprite | Phaser.GameObjects.Shape;
   playerControl?: boolean;
+
   station?: boolean;
   interactionRadius?: number;
   name?: string; // Station Name
+
+  // Economy Components
+  stationType?: StationType;
+  inventory?: Partial<Record<ItemId, number>>;
+  productionConfig?: ProductionRule;
+  lastProductionTick?: number;
 
   // AI / NPC Components
   aiState?: 'IDLE' | 'MOVING' | 'DOCKING';

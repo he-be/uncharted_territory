@@ -1,4 +1,4 @@
-import { ItemId } from './items';
+import type { ItemId } from './items';
 
 export type StationType = 'trading' | 'factory' | 'mining';
 

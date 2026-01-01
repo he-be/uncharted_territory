@@ -5,6 +5,8 @@ import { playerControlSystem } from '../ecs/systems/playerControl';
 import { interactionSystem } from '../ecs/systems/interaction';
 import { aiSystem } from '../ecs/systems/ai';
 import { npcSpawnerSystem } from '../ecs/systems/npcSpawner';
+import { economySystem } from '../ecs/systems/economy';
+import { STATION_CONFIGS, type StationType } from '../data/stations';
 import { ui } from '../ui/ui';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -95,9 +97,9 @@ export class MainScene extends Phaser.Scene {
     world.add(this.playerEntity);
 
     // 4. Stations
-    this.createStation('station', 800, 600, 'Alpha Station (Trading)');
-    this.createStation('station_factory', 2000, 1000, 'Beta Factory');
-    this.createStation('station_mining', -1000, 500, 'Gamma Mining Outpost');
+    this.createStation('station', 800, 600, 'Alpha Station (Trading)', 'trading');
+    this.createStation('station_factory', 2000, 1000, 'Beta Factory', 'factory');
+    this.createStation('station_mining', -1000, 500, 'Gamma Mining Outpost', 'mining');
 
     // Camera
     this.cameras.main.startFollow(playerSprite);
@@ -112,10 +114,12 @@ export class MainScene extends Phaser.Scene {
     ui.closeTradeBtn.addEventListener('click', () => this.undock());
   }
 
-  createStation(key: string, x: number, y: number, name: string) {
+  createStation(key: string, x: number, y: number, name: string, type: StationType) {
     const sprite = this.add.sprite(x, y, key);
     sprite.setScale(0.5);
     sprite.setDepth(1);
+
+    const config = STATION_CONFIGS[type];
 
     world.add({
       id: uuidv4(),
@@ -125,6 +129,9 @@ export class MainScene extends Phaser.Scene {
       station: true,
       interactionRadius: 200,
       name: name,
+      stationType: type,
+      inventory: { ...config.initInventory },
+      productionConfig: config.production,
     });
   }
 
@@ -132,19 +139,27 @@ export class MainScene extends Phaser.Scene {
     if (this.keyZ.isDown) this.adjustZoom(this.ZOOM_SPEED * 0.5);
     if (this.keyX.isDown) this.adjustZoom(-this.ZOOM_SPEED * 0.5);
 
+    // If docked, we only skip player movement/control updates
     if (this.isDocked) {
+      // Check for undock key
       if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
         this.undock();
       }
-      return;
+    } else {
+      // Only control player and move entities if NOT docked (or maybe entities always move?)
+      // Actually, standard game behavior: World keeps moving. Player is just pinned.
+      playerControlSystem(this.cursors);
     }
 
-    playerControlSystem(this.cursors);
+    // Always run these (unless paused globally)
     movementSystem(delta);
 
-    // NPC Systems (NEW)
+    // NPC Systems
     npcSpawnerSystem(this, delta);
     aiSystem(delta);
+
+    // Economy System
+    economySystem(time, delta);
 
     // Update Trail
     if (this.playerEntity.transform) {
@@ -205,8 +220,12 @@ export class MainScene extends Phaser.Scene {
     }
 
     ui.showDockingHint(false);
-    // Pass station name to UI
-    ui.showTradeMenu(true, station.name || 'Unknown Station');
+    // Pass station name and inventory to UI
+    ui.showTradeMenu(
+      true,
+      station.name || 'Unknown Station',
+      station.inventory as Record<string, number>
+    );
   }
 
   undock() {
