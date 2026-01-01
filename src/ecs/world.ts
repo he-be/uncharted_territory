@@ -29,12 +29,24 @@ export type Entity = {
 
   // NPC Economy
   cargo?: Partial<Record<ItemId, number>>;
+  wallet?: number;
+  totalProfit?: number;
 
   // AI / NPC Components
-  aiState?: 'IDLE' | 'MOVING' | 'DOCKING' | 'TRADING_BUY' | 'TRADING_SELL';
+  aiState?: 'PLANNING' | 'EXECUTING_TRADE';
+  tradeRoute?: {
+    buyStationId: string;
+    sellStationId: string;
+    itemId: ItemId;
+    state: 'MOVING_TO_BUY' | 'BUYING' | 'MOVING_TO_SELL' | 'SELLING';
+  };
+
   target?: { x: number; y: number };
-  targetStationId?: string; // ID of the station
+  targetStationId?: string; // Legacy/Fallback?
   speedStats?: { maxSpeed: number; acceleration: number };
+
+  // Visuals
+  textOverlay?: Phaser.GameObjects.Text;
 };
 
 export const world = new World<Entity>();

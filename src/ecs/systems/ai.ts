@@ -1,179 +1,230 @@
-import { world, type Entity } from '../world';
-import { STATION_CONFIGS } from '../../data/stations';
+import { world } from '../world';
+import { calculatePrice } from '../../utils/economyUtils';
+import { STATION_CONFIGS, type StationType } from '../../data/stations';
 import type { ItemId } from '../../data/items';
-import type { StationType } from '../../data/stations';
 
 const ARRIVAL_RADIUS = 50;
 
-// Helper: Check if station needs a specific item
-const doesStationNeed = (stationEntity: Entity, itemId: ItemId): boolean => {
-  // 1. Is it an input for production?
-  const config = STATION_CONFIGS[stationEntity.stationType as StationType];
-  if (config?.production?.consumes) {
-    return config.production.consumes.some((input) => input.itemId === itemId);
-  }
-  return false;
-};
-
-// Helper: Check if station produces a specific item (and has stock)
-const doesStationProduce = (stationEntity: Entity, itemId?: ItemId): boolean => {
-  const config = STATION_CONFIGS[stationEntity.stationType as StationType];
-  if (config?.production?.produces) {
-    if (itemId) {
-      const stock = stationEntity.inventory?.[itemId] || 0;
-      return config.production.produces.some((output) => output.itemId === itemId) && stock > 0;
-    } else {
-      // Check if it produces ANYTHING and has stock of it
-      return config.production.produces.some(
-        (output) => (stationEntity.inventory?.[output.itemId] || 0) > 0
-      );
-    }
-  }
-  return false;
-};
-
 export const aiSystem = (_delta: number) => {
-  const aiEntities = world.with('transform', 'velocity', 'aiState', 'speedStats');
+  const aiEntities = world.with(
+    'transform',
+    'velocity',
+    'aiState',
+    'speedStats',
+    'wallet',
+    'totalProfit'
+  ); // Ensure wallet/profit exist
   const stations = world.with('station', 'transform', 'stationType', 'inventory');
 
   for (const entity of aiEntities) {
     // ----------------------------------------------------
-    // 1. STATE MANAGEMENT
+    // STATE: PLANNING
+    // Calculate best route (Profit/Time) and Commit
     // ----------------------------------------------------
+    if (entity.aiState === 'PLANNING') {
+      const possibleRoutes: Array<{
+        buyStationId: string;
+        sellStationId: string;
+        itemId: ItemId;
+        score: number;
+        expectedProfit: number;
+      }> = [];
 
-    // IDLE: Decide what to do
-    if (entity.aiState === 'IDLE') {
-      // DECISION LOGIC:
-      // 1. Do we have cargo? -> Sell it.
-      // 2. Are we empty? -> Find something to Buy.
+      const stationList = Array.from(stations);
 
-      const cargo = entity.cargo || {};
-      const cargoItems = Object.keys(cargo) as ItemId[];
-      const hasCargo = cargoItems.some((item) => (cargo[item] || 0) > 0);
+      // 1. Identify all Producers
+      for (const producer of stationList) {
+        const pConfig = STATION_CONFIGS[producer.stationType as StationType];
+        if (!pConfig.production?.produces) continue;
 
-      if (hasCargo) {
-        // STRATEGY: SELL
-        // Find a station that needs what we have
-        const itemToSell = cargoItems.find((item) => (cargo[item] || 0) > 0)!;
+        for (const production of pConfig.production.produces) {
+          const itemId = production.itemId;
+          // Check stock at producer
+          const stock = producer.inventory?.[itemId] || 0;
+          if (stock <= 0) continue;
 
-        // Find consumer
-        let targetStation = null;
-        for (const s of stations) {
-          if (doesStationNeed(s, itemToSell)) {
-            targetStation = s;
-            break;
+          const buyPrice = calculatePrice(producer, itemId);
+
+          // 2. Identify Consumers for this Item
+          for (const consumer of stationList) {
+            if (producer === consumer) continue;
+
+            // Check if consumer consumes this item
+            const cConfig = STATION_CONFIGS[consumer.stationType as StationType];
+            const consumes = cConfig.production?.consumes?.some((c) => c.itemId === itemId);
+
+            if (consumes) {
+              const sellPrice = calculatePrice(consumer, itemId);
+              const profitPerUnit = sellPrice - buyPrice;
+
+              if (profitPerUnit > 0) {
+                // 3. Score the Route
+                // Distance: Ship -> Producer -> Consumer
+                const distToProducer = Phaser.Math.Distance.Between(
+                  entity.transform.x,
+                  entity.transform.y,
+                  producer.transform.x,
+                  producer.transform.y
+                );
+                const distToConsumer = Phaser.Math.Distance.Between(
+                  producer.transform.x,
+                  producer.transform.y,
+                  consumer.transform.x,
+                  consumer.transform.y
+                );
+                const totalDist = distToProducer + distToConsumer;
+                const time = totalDist / entity.speedStats.maxSpeed; // approximate time
+
+                const cargoCapacity = 10; // Fixed for now
+                const totalProfit = profitPerUnit * cargoCapacity;
+
+                // Score = Profit / Time
+                const score = totalProfit / (time + 1); // Avoid div by zero
+
+                possibleRoutes.push({
+                  buyStationId: producer.id,
+                  sellStationId: consumer.id,
+                  itemId: itemId,
+                  score: score,
+                  expectedProfit: totalProfit,
+                });
+              }
+            }
           }
         }
+      }
 
-        if (targetStation) {
-          entity.aiState = 'TRADING_SELL';
-          entity.target = { x: targetStation.transform.x, y: targetStation.transform.y };
-          entity.targetStationId = targetStation.id;
-        } else {
-          // No buyer found? Wander randomly (or stay IDLE)
-          entity.aiState = 'IDLE';
-        }
+      // 4. Decision (Weighted Random)
+      if (possibleRoutes.length > 0) {
+        // Sort by score desc
+        possibleRoutes.sort((a, b) => b.score - a.score);
+
+        // Pick top 3 or all if less
+        const candidates = possibleRoutes.slice(0, 3);
+
+        // Simple random among top candidates to avoid deadlock
+        const chosenRoute = candidates[Math.floor(Math.random() * candidates.length)];
+
+        // Commit
+        entity.tradeRoute = {
+          buyStationId: chosenRoute.buyStationId,
+          sellStationId: chosenRoute.sellStationId,
+          itemId: chosenRoute.itemId,
+          state: 'MOVING_TO_BUY',
+        };
+        entity.aiState = 'EXECUTING_TRADE';
       } else {
-        // STRATEGY: BUY
-        // Find a station that has something we can sell somewhere else
-        // Improved Logic: Find a valid Route (Producer -> Consumer)
-
-        // For now, iterate stations, find one with Stock.
-
-        const producers = Array.from(stations).filter((s) => doesStationProduce(s));
-
-        if (producers.length > 0) {
-          const randomProducer = producers[Math.floor(Math.random() * producers.length)];
-          entity.aiState = 'TRADING_BUY';
-          entity.target = { x: randomProducer.transform.x, y: randomProducer.transform.y };
-          entity.targetStationId = randomProducer.id;
-        }
+        // No profitable routes? Wait? Or wander?
+        // For now, simple wait (could implement WANDER state)
       }
     }
 
     // ----------------------------------------------------
-    // 2. MOVEMENT (Common for all moving states)
+    // STATE: EXECUTING_TRADE
+    // Follow the committed plan
     // ----------------------------------------------------
-    if (['MOVING', 'TRADING_BUY', 'TRADING_SELL'].includes(entity.aiState!)) {
-      if (entity.target) {
-        const dx = entity.target.x - entity.transform.x;
-        const dy = entity.target.y - entity.transform.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+    if (entity.aiState === 'EXECUTING_TRADE' && entity.tradeRoute) {
+      const route = entity.tradeRoute;
 
-        if (dist < ARRIVAL_RADIUS) {
-          // ARRIVED!
-          entity.velocity.vx = 0;
-          entity.velocity.vy = 0;
+      // Targets
+      let targetId = '';
+      if (route.state === 'MOVING_TO_BUY' || route.state === 'BUYING') {
+        targetId = route.buyStationId;
+      } else {
+        targetId = route.sellStationId;
+      }
 
-          // Handle State Completions
-          if (entity.aiState === 'TRADING_BUY') {
-            // Action: BUY
-            if (entity.targetStationId) {
-              const station = world.where((e) => e.id === entity.targetStationId).first;
-              if (station && station.productionConfig && station.productionConfig.produces) {
-                // Buying Logic: Pick a random item they produce that HAS STOCK.
-                const producedItems = station.productionConfig.produces;
-                const availableItems = producedItems.filter(
-                  (p) => (station.inventory?.[p.itemId] || 0) > 0
-                );
+      const targetStation = world.where((e) => e.id === targetId).first;
 
-                if (availableItems.length > 0) {
-                  const selectedProduct =
-                    availableItems[Math.floor(Math.random() * availableItems.length)];
-                  const outputItem = selectedProduct.itemId;
-                  const amount = 10;
+      // Safely check targetStation existence AND its transform
+      if (!targetStation || !targetStation.transform) {
+        // Station gone? Abort.
+        entity.aiState = 'PLANNING';
+        entity.tradeRoute = undefined;
+        continue;
+      }
 
-                  // Decrease Station Inventory (Check stock first)
-                  const currentStock = station.inventory?.[outputItem] || 0;
-                  const actualAmount = Math.min(amount, currentStock);
+      const targetX = targetStation.transform.x;
+      const targetY = targetStation.transform.y;
 
-                  if (actualAmount > 0) {
-                    station.inventory![outputItem]! -= actualAmount;
+      // Movement Logic
+      const dx = targetX - entity.transform.x;
+      const dy = targetY - entity.transform.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    // Add to Ship Cargo
-                    if (!entity.cargo) entity.cargo = {};
-                    if (!entity.cargo[outputItem]) entity.cargo[outputItem] = 0;
-                    entity.cargo[outputItem]! += actualAmount;
-                  }
-                }
-              }
-            }
-            // Done buying, switch to IDLE to decide next step (which will be SELL)
-            entity.aiState = 'IDLE';
-          } else if (entity.aiState === 'TRADING_SELL') {
-            // Action: SELL
-            // Logic: Dump everything valid.
-            if (entity.targetStationId) {
-              const station = world.where((e) => e.id === entity.targetStationId).first;
-              if (station && entity.cargo) {
-                // Sell everything this station "Needs"
-                for (const item of Object.keys(entity.cargo)) {
-                  const itemId = item as ItemId;
-                  if (doesStationNeed(station, itemId)) {
-                    const amount = entity.cargo[itemId] || 0;
-                    if (amount > 0) {
-                      // Transfer
-                      entity.cargo[itemId] = 0;
-                      // Add to station inventory
-                      if (!station.inventory![itemId]) station.inventory![itemId] = 0;
-                      station.inventory![itemId]! += amount;
-                    }
-                  }
-                }
-              }
-            }
-            entity.aiState = 'IDLE';
+      // Steer
+      const angle = Math.atan2(dy, dx);
+      entity.transform.rotation = angle;
+      entity.velocity.vx = Math.cos(angle) * entity.speedStats.maxSpeed;
+      entity.velocity.vy = Math.sin(angle) * entity.speedStats.maxSpeed;
+
+      // Arrival Logic
+      if (dist < ARRIVAL_RADIUS) {
+        entity.velocity.vx = 0;
+        entity.velocity.vy = 0;
+
+        // Handle Sub-States
+        if (route.state === 'MOVING_TO_BUY') {
+          // Attempt Buy
+          const buyPrice = calculatePrice(targetStation, route.itemId);
+          const amount = 10;
+          const cost = buyPrice * amount;
+
+          // Check Wallet & Stock
+          if (
+            (entity.wallet || 0) >= cost &&
+            (targetStation.inventory?.[route.itemId] || 0) >= amount
+          ) {
+            // Transaction
+            entity.wallet! -= cost;
+            targetStation.inventory![route.itemId]! -= amount;
+
+            // Station Revenue (NEW)
+            if (targetStation.wallet === undefined) targetStation.wallet = 0;
+            targetStation.wallet += cost;
+
+            if (!entity.cargo) entity.cargo = {};
+            if (!entity.cargo[route.itemId]) entity.cargo[route.itemId] = 0;
+            entity.cargo[route.itemId]! += amount;
+
+            // Visual Feedback (Loss/Cost)
+            if (entity.totalProfit === undefined) entity.totalProfit = 0;
+            entity.totalProfit -= cost;
+
+            // Next Step
+            route.state = 'MOVING_TO_SELL';
           } else {
-            // Normal Move
-            entity.aiState = 'IDLE';
+            // Failed to buy (Too expensive now? Stock gone?)
+            // Abort
+            entity.aiState = 'PLANNING';
+            entity.tradeRoute = undefined;
           }
-        } else {
-          // Move
-          const angle = Math.atan2(dy, dx);
-          entity.transform.rotation = angle;
-          const speed = entity.speedStats.maxSpeed;
-          entity.velocity.vx = Math.cos(angle) * speed;
-          entity.velocity.vy = Math.sin(angle) * speed;
+        } else if (route.state === 'MOVING_TO_SELL') {
+          // Attempt Sell
+          const sellPrice = calculatePrice(targetStation, route.itemId);
+          const amount = entity.cargo?.[route.itemId] || 0;
+          const revenue = sellPrice * amount;
+
+          if (amount > 0) {
+            // Transaction
+            entity.wallet! += revenue;
+
+            // Station Cost (NEW)
+            if (targetStation.wallet === undefined) targetStation.wallet = 0;
+            targetStation.wallet -= revenue;
+
+            if (!targetStation.inventory![route.itemId]) targetStation.inventory![route.itemId] = 0;
+            targetStation.inventory![route.itemId]! += amount;
+
+            entity.cargo![route.itemId] = 0;
+
+            // Visual Feedback (Profit)
+            if (entity.totalProfit === undefined) entity.totalProfit = 0;
+            entity.totalProfit += revenue;
+          }
+
+          // Done
+          entity.aiState = 'PLANNING';
         }
       }
     }

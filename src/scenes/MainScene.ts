@@ -6,6 +6,7 @@ import { interactionSystem } from '../ecs/systems/interaction';
 import { aiSystem } from '../ecs/systems/ai';
 import { npcSpawnerSystem } from '../ecs/systems/npcSpawner';
 import { economySystem } from '../ecs/systems/economy';
+import { overlaySystem } from '../ecs/systems/overlaySystem';
 import { STATION_CONFIGS, type StationType } from '../data/stations';
 import { ui } from '../ui/ui';
 import { v4 as uuidv4 } from 'uuid';
@@ -132,6 +133,8 @@ export class MainScene extends Phaser.Scene {
       stationType: type,
       inventory: { ...config.initInventory },
       productionConfig: config.production,
+      wallet: 10000,
+      totalProfit: 0,
     });
   }
 
@@ -168,6 +171,9 @@ export class MainScene extends Phaser.Scene {
 
     // Economy System
     economySystem(time, delta);
+
+    // UI/Overlay
+    overlaySystem(this);
 
     // Update Trail
     if (this.playerEntity.transform) {
