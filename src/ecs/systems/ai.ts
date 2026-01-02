@@ -35,8 +35,7 @@ export const aiSystem = (_delta: number) => {
   }
 
   // Update Gate Cache
-  if (gateCache.size === 0 && gates.size > 0) {
-    gateCache.clear();
+  if (gateCache.size === 0) {
     for (const g of gates) {
       if (!g.sectorId) continue;
       const list = gateCache.get(g.sectorId) || [];
@@ -208,9 +207,9 @@ export const aiSystem = (_delta: number) => {
       if (targetEntity && targetEntity.sectorId !== entity.sectorId) {
         const path = findPath(entity.sectorId || '', targetEntity.sectorId || '');
 
-        if (path && path.length > 1) {
-          // path[0] is current, path[1] is next sector
-          const nextSector = path[1];
+        if (path && path.length > 0) {
+          // path[0] is next sector
+          const nextSector = path[0];
 
           const sectorGates = gateCache.get(entity.sectorId || '');
           const validGate = sectorGates?.find((g) => g.gate?.destinationSectorId === nextSector);
@@ -226,7 +225,7 @@ export const aiSystem = (_delta: number) => {
         // Fail gracefully
         entity.aiState = 'PLANNING';
         entity.tradeRoute = undefined;
-        tExec += performance.now() - tEStart;
+        // tExec is handled above or unused
         continue;
       }
 
