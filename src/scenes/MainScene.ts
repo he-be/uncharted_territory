@@ -35,6 +35,7 @@ export class MainScene extends Phaser.Scene {
   private keyX!: Phaser.Input.Keyboard.Key;
   private keyC!: Phaser.Input.Keyboard.Key;
   private keyV!: Phaser.Input.Keyboard.Key;
+  private keyB!: Phaser.Input.Keyboard.Key;
 
   private playerEntity!: Entity;
 
@@ -115,6 +116,11 @@ export class MainScene extends Phaser.Scene {
       ui.toggleEco(isHidden); // Toggle
     });
 
+    ui.toggleStatsBtn.addEventListener('click', () => {
+      const isHidden = ui.statsDashboard.classList.contains('hidden');
+      ui.toggleStats(isHidden);
+    });
+
     // Trail Graphics
     this.trailGraphics = this.add.graphics();
     this.trailGraphics.setDepth(5);
@@ -173,6 +179,12 @@ export class MainScene extends Phaser.Scene {
       if (Phaser.Input.Keyboard.JustDown(this.keyV)) {
         const isHidden = ui.ecoDashboard.classList.contains('hidden');
         ui.toggleEco(isHidden);
+      }
+
+      // Stats Dashboard Toggle (B)
+      if (Phaser.Input.Keyboard.JustDown(this.keyB)) {
+        const isHidden = ui.statsDashboard.classList.contains('hidden');
+        ui.toggleStats(isHidden);
       }
 
       // 3. Player Control
@@ -268,6 +280,7 @@ export class MainScene extends Phaser.Scene {
     this.keyX = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
     this.keyC = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C);
     this.keyV = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.V);
+    this.keyB = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.B);
   }
 
   adjustZoom(delta: number) {

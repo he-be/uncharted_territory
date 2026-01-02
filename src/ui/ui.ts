@@ -15,8 +15,16 @@ export const ui = {
   zoomOutBtn: document.getElementById('zoom-out')!,
   toggleMapBtn: document.getElementById('toggle-map')!,
   toggleEcoBtn: document.getElementById('toggle-eco')!,
+  toggleStatsBtn: document.getElementById('toggle-stats')!,
   ecoDashboard: document.getElementById('eco-dashboard')!,
+  statsDashboard: document.getElementById('stats-dashboard')!,
+  statsContent: document.getElementById('stats-content')!,
   ecoChart: document.getElementById('eco-chart') as HTMLCanvasElement,
+
+  toggleStats(show: boolean) {
+    if (show) this.statsDashboard.classList.remove('hidden');
+    else this.statsDashboard.classList.add('hidden');
+  },
 
   toggleEco(show: boolean) {
     if (show) this.ecoDashboard.classList.remove('hidden');

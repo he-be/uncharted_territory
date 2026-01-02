@@ -25,6 +25,12 @@
         >
           $
         </button>
+        <button
+          id="toggle-stats"
+          style="margin-right: 10px; font-weight: bold; color: cyan; border-color: cyan"
+        >
+          STATS
+        </button>
         <button id="toggle-map" style="margin-right: 10px">MAP</button>
         <button id="zoom-in">+</button>
         <button id="zoom-out">-</button>
@@ -37,6 +43,10 @@
           <span style="color: #ff4444">PIRATES</span>
         </div>
         <canvas id="eco-chart" width="800" height="400"></canvas>
+      </div>
+      <div id="stats-dashboard" class="hidden">
+        <h2>Production Statistics (Global)</h2>
+        <div id="stats-content"></div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

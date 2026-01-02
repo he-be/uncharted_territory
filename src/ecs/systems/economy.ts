@@ -1,4 +1,5 @@
 import { world } from '../world';
+import { recordProduction } from './analyticsSystem';
 // import type { ItemId } from '../../data/items';
 
 // Economy System
@@ -45,6 +46,9 @@ export const economySystem = (time: number, _delta: number) => {
               entity.inventory![output.itemId] = 0;
             }
             entity.inventory![output.itemId]! += output.rate;
+
+            // Analytics
+            recordProduction(output.itemId, output.rate);
           }
         }
       } else {

@@ -2,9 +2,12 @@ import { world } from '../world';
 import { ITEMS, type ItemId } from '../../data/items';
 import { ui } from '../../ui/ui';
 
-const HISTORY_SIZE = 300;
-const UPDATE_INTERVAL = 500; // ms
+const HISTORY_SIZE = 300; // 5 minutes (for graph)
+const PRODUCTION_HISTORY_SIZE = 300; // 5 minutes (seconds resolution)
+const UPDATE_INTERVAL = 500; // ms for graph update
+const RENDER_INTERVAL = 1000; // ms for stats table update
 
+// Graph History
 let lastUpdate = 0;
 const statHistory: {
   time: number;
@@ -13,8 +16,40 @@ const statHistory: {
   pirateVal: number;
 }[] = [];
 
+// Production History (Circular Buffer of 1s buckets)
+const productionBuckets: Record<ItemId, number>[] = new Array(PRODUCTION_HISTORY_SIZE)
+  .fill(0)
+  .map(() => ({}) as Record<ItemId, number>);
+let currentBucketIndex = 0;
+let lastProductionTick = 0;
+
+// API to record production
+export const recordProduction = (itemId: ItemId, amount: number) => {
+  const bucket = productionBuckets[currentBucketIndex];
+  bucket[itemId] = (bucket[itemId] || 0) + amount;
+};
+
+let lastRender = 0;
+
 export const analyticsSystem = (time: number) => {
-  // 1. Data Collection (Throttled)
+  // 0. Update Production Buckets (Time based)
+  // Simple approach: each call check if second changed.
+  const nowSec = Math.floor(time / 1000);
+  const lastSec = Math.floor(lastProductionTick / 1000);
+
+  if (nowSec > lastSec) {
+    const diff = nowSec - lastSec;
+    // Advance buckets
+    for (let i = 0; i < diff; i++) {
+      currentBucketIndex = (currentBucketIndex + 1) % PRODUCTION_HISTORY_SIZE;
+      // Reset new bucket
+      productionBuckets[currentBucketIndex] = {} as Record<ItemId, number>;
+    }
+    lastProductionTick = time;
+  }
+  if (lastProductionTick === 0) lastProductionTick = time;
+
+  // 1. Data Collection (Graph)
   if (time - lastUpdate > UPDATE_INTERVAL) {
     lastUpdate = time;
 
@@ -22,10 +57,9 @@ export const analyticsSystem = (time: number) => {
     let totalTraderVal = 0;
     let totalPirateVal = 0;
 
-    // Stations: Wallet + Inventory
+    // Stations
     for (const station of world.with('station', 'wallet', 'inventory')) {
       totalStationVal += station.wallet || 0;
-      // Inventory Value
       if (station.inventory) {
         for (const [id, count] of Object.entries(station.inventory)) {
           const item = ITEMS[id as ItemId];
@@ -36,19 +70,12 @@ export const analyticsSystem = (time: number) => {
       }
     }
 
-    // Traders: Total Profit (Simulating wealth) + Cargo value?
-    // Let's just track accumulated profit for now as a proxy for their success.
-    // Or we could track their 'simulated' wallet if we had one.
-    // Current entity model: 'totalProfit' is the main metric.
-    for (const trader of world.with('totalProfit', 'faction')) {
-      if (trader.faction === 'TRADER') {
-        totalTraderVal += trader.totalProfit || 0;
-      } else if (trader.faction === 'PIRATE') {
-        // Pirates use 'piracy.revenue' usually, but let's check
-        // Pirate wealth is stored in 'piracy.revenue'
-        if (trader.piracy) {
-          totalPirateVal += trader.piracy.revenue || 0;
-        }
+    // Ships
+    for (const ship of world.with('faction', 'totalProfit', 'piracy')) {
+      if (ship.faction === 'TRADER') {
+        totalTraderVal += ship.totalProfit || 0;
+      } else if (ship.faction === 'PIRATE') {
+        totalPirateVal += ship.piracy?.revenue || 0;
       }
     }
 
@@ -64,9 +91,91 @@ export const analyticsSystem = (time: number) => {
     }
   }
 
-  // 2. Rendering (Only if visible)
-  if (ui.ecoDashboard.classList.contains('hidden')) return;
+  // 2. Rendering
 
+  // A. Graph Render
+  if (!ui.ecoDashboard.classList.contains('hidden')) {
+    renderGraph();
+  }
+
+  // B. Stats Table Render
+  if (!ui.statsDashboard.classList.contains('hidden')) {
+    if (time - lastRender > RENDER_INTERVAL) {
+      lastRender = time;
+      renderStatsTable();
+    }
+  }
+};
+
+const renderStatsTable = () => {
+  // Calculate Averages
+  // Helper to sum last N buckets
+  const sumBuckets = (seconds: number): Record<ItemId, number> => {
+    const totals: Record<string, number> = {};
+    for (let i = 0; i < seconds; i++) {
+      // circular back access
+      let idx = currentBucketIndex - i;
+      if (idx < 0) idx += PRODUCTION_HISTORY_SIZE;
+
+      const bucket = productionBuckets[idx];
+      for (const [id, val] of Object.entries(bucket)) {
+        totals[id] = (totals[id] || 0) + val;
+      }
+    }
+    return totals;
+  };
+
+  const sum15 = sumBuckets(15);
+  const sum60 = sumBuckets(60);
+  const sum300 = sumBuckets(300);
+
+  let html = `
+    <table style="width:100%; text-align:left; border-collapse:collapse; font-family:monospace;">
+        <thead>
+            <tr style="border-bottom:1px solid #555; color:#aaa;">
+                <th style="padding:4px;">Item</th>
+                <th style="padding:4px; text-align:right;">15s Avg</th>
+                <th style="padding:4px; text-align:right;">1m Avg</th>
+                <th style="padding:4px; text-align:right;">5m Avg</th>
+            </tr>
+        </thead>
+        <tbody>
+    `;
+
+  // Sorted items?
+  const allItems = Object.keys(ITEMS) as ItemId[];
+
+  for (const id of allItems) {
+    // Filter out if no production? Or show zeros? Show all for comprehensive view.
+    const name = ITEMS[id].name;
+
+    // Rates per minute? Or per second?
+    // "Average value". Let's show as "Units/min"
+    const r15 = (sum15[id] || 0) * (60 / 15);
+    const r60 = sum60[id] || 0; // already 60s
+    const r300 = (sum300[id] || 0) / 5; // 300s -> per min
+
+    // Dynamic color if producing?
+    const activeColor = r15 > 0 ? '#00ff00' : '#888';
+
+    html += `
+            <tr style="border-bottom:1px solid #333;">
+                <td style="padding:4px; color:${activeColor}">${name}</td>
+                <td style="padding:4px; text-align:right;">${r15.toFixed(1)}/m</td>
+                <td style="padding:4px; text-align:right;">${r60.toFixed(1)}/m</td>
+                <td style="padding:4px; text-align:right;">${r300.toFixed(1)}/m</td>
+            </tr>
+        `;
+  }
+
+  html += `</tbody></table>`;
+
+  // Add total value stats?
+
+  ui.statsContent.innerHTML = html;
+};
+
+const renderGraph = () => {
   const canvas = ui.ecoChart;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -101,22 +210,16 @@ export const analyticsSystem = (time: number) => {
     if (min === max) {
       min -= 10;
       max += 10;
-    } // Prevent div by zero
+    }
     return { min, max };
   };
 
   // --- Subplot 1: Stations (Top Half) ---
-  // Range
   const stRange = getMinMax(['stationVal']);
-  // Add margin (5%)
   const stMargin = (stRange.max - stRange.min) * 0.05;
   stRange.min -= stMargin;
   stRange.max += stMargin;
 
-  // MapY: val -> 0..halfH
-  // but canvas Y is 0 at top. we want max at top (+padding), min at bottom (-padding)
-  // topLimit = padding
-  // bottomLimit = halfH - padding
   const mapYStation = (val: number) => {
     const pct = (val - stRange.min) / (stRange.max - stRange.min);
     return halfH - padding - pct * (halfH - 2 * padding);
@@ -155,19 +258,12 @@ export const analyticsSystem = (time: number) => {
 
   // --- Subplot 2: Traders & Pirates (Bottom Half) ---
   const shRange = getMinMax(['traderVal', 'pirateVal']);
-  // Add margin
   const shMargin = (shRange.max - shRange.min) * 0.05;
   shRange.min -= shMargin;
   shRange.max += shMargin;
 
-  // Top of bottom plot = halfH
-  // bottom of bottom plot = h
-  // MapY
   const mapYShip = (val: number) => {
     const pct = (val - shRange.min) / (shRange.max - shRange.min);
-    // bottom limit: h - padding
-    // top limit: halfH + padding
-    // range height: (h - padding) - (halfH + padding) = halfH - 2*padding
     return h - padding - pct * (halfH - 2 * padding);
   };
 

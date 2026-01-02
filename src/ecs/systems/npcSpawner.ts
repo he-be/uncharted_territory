@@ -6,9 +6,9 @@ import { ITEMS, type ItemId } from '../../data/items';
 // Configuration
 const BASE_CHECK_INTERVAL = 60000; // 60s
 const CHECK_VARIANCE = 10000; // +/- 10s
-const PIRATE_WEALTH_THRESHOLD = 1000; // Wealth increase needed to spawn 1 pirate (Increased 5x)
+const PIRATE_WEALTH_THRESHOLD = 5000; // Wealth increase needed to spawn 1 pirate (Increased 5x)
 const MAX_PIRATES_PER_WAVE = 5;
-const BOUNTY_HUNTER_CHANCE = 0.3; // 30% chance per Pirate to spawn a Hunter
+const BOUNTY_HUNTER_CHANCE = 0.5; // 50% chance per Pirate to spawn a Hunter
 const PIRATE_GRACE_PERIOD = 180000; // 3 minutes
 
 interface SectorState {
@@ -229,16 +229,16 @@ const spawnShip = (
   // Stats based on faction
   let hp = 100;
   let shields = 50;
-  let speed = 100;
+  let speed = 150; // +50%
 
   if (faction === 'PIRATE') {
     hp = 120;
     shields = 60;
-    speed = 120;
+    speed = 180; // +50%
   } else if (faction === 'BOUNTY_HUNTER') {
     hp = 200; // Stronger
     shields = 150;
-    speed = 140; // Faster
+    speed = 210; // +50%
   }
 
   world.add({
