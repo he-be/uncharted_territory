@@ -47,7 +47,6 @@ export const aiSystem = () => {
   // For now, simple flag to limit planning to ONE entity per frame to spread load
   let processedPlanning = false;
 
-  const startTotal = performance.now();
   // let tExec = 0;
 
   for (const entity of aiEntities) {
