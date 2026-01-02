@@ -24,7 +24,10 @@ export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
       const x = sectorPos.x + Math.cos(angle) * radius;
       const y = sectorPos.y + Math.sin(angle) * radius;
 
-      const sprite = scene.add.sprite(x, y, 'npc_trader');
+      const isPirate = startSector.type === 'pirate';
+
+      const spriteKey = isPirate ? 'npc_pirate' : 'npc_trader';
+      const sprite = scene.add.sprite(x, y, spriteKey);
       sprite.setScale(0.12);
       sprite.setDepth(2);
 
@@ -35,13 +38,23 @@ export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
         sprite: sprite,
         // AI Components
         aiState: 'PLANNING',
-        speedStats: { maxSpeed: 100, acceleration: 100 },
+        speedStats: { maxSpeed: isPirate ? 120 : 100, acceleration: 100 },
         // Economy
         cargo: {},
         wallet: 1000,
         totalProfit: 0,
         target: undefined,
         sectorId: startSector.id,
+        // Combat
+        faction: isPirate ? 'PIRATE' : 'TRADER',
+        combatStats: {
+          hp: 100,
+          maxHp: 100,
+          shields: 50,
+          maxShields: 50,
+          shieldRechargeRate: 5,
+        },
+        piracy: isPirate ? { revenue: 0 } : undefined,
       });
       console.log(
         `[NPC Spawner] Spawned new NPC in ${startSector.name}. Total: ${existingNpcs.size + 1}`

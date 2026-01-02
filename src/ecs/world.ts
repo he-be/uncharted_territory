@@ -34,7 +34,8 @@ export type Entity = {
 
   // AI / NPC Components
   // AI / NPC Components
-  aiState?: 'PLANNING' | 'EXECUTING_TRADE';
+  // AI / NPC Components
+  aiState?: 'PLANNING' | 'EXECUTING_TRADE' | 'COMBAT';
   tradeRoute?: {
     buyStationId: string;
     sellStationId: string;
@@ -59,6 +60,34 @@ export type Entity = {
 
   // Visuals
   textOverlay?: Phaser.GameObjects.Text;
+
+  // Combat
+  combatStats?: {
+    hp: number;
+    maxHp: number;
+    shields: number;
+    maxShields: number;
+    shieldRechargeRate: number;
+    lastDamageTime?: number;
+  };
+  piracy?: {
+    revenue: number;
+  };
+  faction?: string;
+  combatTarget?: string; // Entity ID (Legacy/Direct targeting)
+
+  // Encounter System
+  combatEncounter?: {
+    encounterId: string;
+    role: 'ATTACKER' | 'DEFENDER';
+  };
+
+  // Encounter Zone (The entity representing the zone itself)
+  encounterZone?: {
+    radius: number;
+    center: { x: number; y: number };
+    participants: string[]; // List of Entity IDs
+  };
 
   // AutoPilot
   autoPilot?: {

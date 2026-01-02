@@ -101,6 +101,12 @@ export const aiSystem = (_delta: number) => {
 
   for (const entity of aiEntities) {
     if (!entity.speedStats) continue;
+    // If in combat, skip AI movement (Lock-in)
+    if (entity.combatEncounter) continue;
+
+    // Pirates use combatSystem for logic, not this trade AI
+    if (entity.faction === 'PIRATE') continue;
+
     const maxSpeed = entity.speedStats.maxSpeed;
 
     // ----------------------------------------------------

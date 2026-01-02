@@ -10,6 +10,7 @@ import { overlaySystem } from '../ecs/systems/overlaySystem';
 import { renderSystem } from '../ecs/systems/renderSystem';
 import { gateSystem } from '../ecs/systems/gateSystem';
 import { autoPilotSystem } from '../ecs/systems/autoPilot';
+import { combatSystem } from '../ecs/systems/combatSystem';
 import { STATION_CONFIGS, type StationType } from '../data/stations';
 import { ITEMS, type ItemId } from '../data/items';
 import { calculatePrice } from '../utils/economyUtils';
@@ -267,6 +268,7 @@ export class MainScene extends Phaser.Scene {
 
       // NPC Systems
       npcSpawnerSystem(this, delta);
+      combatSystem(this, delta);
 
       // AutoPilot
       autoPilotSystem(this.playerEntity, delta);
