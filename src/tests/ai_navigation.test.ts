@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { aiSystem } from '../ecs/systems/ai';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { aiSystem } from '../ecs/systems/ai';
 
 // Mock pathfinding to use internal mocked data
 vi.mock('../data/universe', () => ({

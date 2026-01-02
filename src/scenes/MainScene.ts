@@ -260,7 +260,7 @@ export class MainScene extends Phaser.Scene {
 
           // Check if clicked an entity? (e.g. gate)
           // Ideally we raycast, but simple proximity for now:
-          const entities = world.with('transform', 'interactionRadius'); // Broad phase
+          // const entities = world.with('transform', 'interactionRadius'); // Broad phase
           // (omitted for brevity, simple coord move is enough for now)
         }
       });
@@ -318,7 +318,9 @@ export class MainScene extends Phaser.Scene {
       }
 
       // Phase 4: Gate & Render Systems
+      // Phase 4: Gate & Render Systems
       gateSystem(this.playerEntity);
+      // mapSystem moved to UIScene
       renderSystem(this.playerEntity);
 
       const totalFrameTime = performance.now() - frameStart;
