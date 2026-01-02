@@ -26,23 +26,23 @@ export class UniverseManager {
 
       switch (sector.type) {
         case 'core':
-          stationMix = ['trading', 'trading', 'factory'];
+          stationMix = ['shipyard', 'trading', 'factory_electronics', 'factory_engine'];
           break;
         case 'industrial':
-          stationMix = ['factory', 'factory', 'mining'];
+          stationMix = ['factory_steel', 'factory_fuel', 'factory_sensors', 'mining_ore'];
           break;
         case 'mining':
-          stationMix = ['mining', 'mining', 'mining'];
+          stationMix = ['mining_ore', 'mining_gas', 'mining_crystal'];
           break;
         case 'frontier':
-          stationMix = ['mining', 'trading'];
+          stationMix = ['trading', 'mining_gas'];
           break;
         default:
           stationMix = ['trading'];
       }
 
       stationMix.forEach((type, index) => {
-        const radius = 2000;
+        const radius = 2500;
         const angle = (Math.PI * 2 * index) / stationMix.length;
 
         const x = sectorCX + Math.cos(angle) * radius + (Math.random() - 0.5) * 500;
@@ -52,7 +52,7 @@ export class UniverseManager {
           this.getStationSpriteKey(type),
           x,
           y,
-          `${sector.name} ${type.charAt(0).toUpperCase() + type.slice(1)} ${index + 1}`,
+          `${sector.name} ${this.getStationNameSuffix(type)} ${index + 1}`,
           type,
           sector.id
         );
@@ -176,6 +176,9 @@ export class UniverseManager {
     sprite.setDepth(1);
 
     const config = STATION_CONFIGS[type];
+    if (config.color) {
+      sprite.setTint(config.color);
+    }
 
     world.add({
       id: uuidv4(),
@@ -221,13 +224,27 @@ export class UniverseManager {
   }
 
   private getStationSpriteKey(type: StationType): string {
-    switch (type) {
-      case 'mining':
-        return 'station_mining';
-      case 'factory':
-        return 'station_factory';
-      default:
-        return 'station';
-    }
+    if (type.startsWith('mining')) return 'station_mining';
+    if (type === 'shipyard') return 'station_shipyard';
+    if (type === 'factory_steel' || type === 'factory_fuel') return 'station_industry';
+    if (type === 'factory_engine' || type === 'factory_sensors') return 'station_equipments';
+    if (type === 'factory_electronics') return 'station_factory';
+    return 'station';
+  }
+
+  private getStationNameSuffix(type: StationType): string {
+    const displayMap: Record<string, string> = {
+      trading: 'Outpost',
+      mining_ore: 'Iron Mine',
+      mining_gas: 'Gas Collector',
+      mining_crystal: 'Crystal Siphon',
+      factory_steel: 'Steelworks',
+      factory_fuel: 'Refinery',
+      factory_electronics: 'Chip Plant',
+      factory_engine: 'Engine Fact.',
+      factory_sensors: 'Sensor Lab',
+      shipyard: 'Shipyard',
+    };
+    return displayMap[type] || 'Station';
   }
 }

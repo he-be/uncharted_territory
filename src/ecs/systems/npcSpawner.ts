@@ -6,10 +6,10 @@ import { ITEMS, type ItemId } from '../../data/items';
 // Configuration
 const BASE_CHECK_INTERVAL = 60000; // 60s
 const CHECK_VARIANCE = 10000; // +/- 10s
-const TRADER_SPAWN_RATE = 0.05; // Chance per frame to spawn a trader (throttled)
-const PIRATE_WEALTH_THRESHOLD = 200; // Wealth increase needed to spawn 1 pirate
+const PIRATE_WEALTH_THRESHOLD = 1000; // Wealth increase needed to spawn 1 pirate (Increased 5x)
 const MAX_PIRATES_PER_WAVE = 5;
 const BOUNTY_HUNTER_CHANCE = 0.3; // 30% chance per Pirate to spawn a Hunter
+const PIRATE_GRACE_PERIOD = 180000; // 3 minutes
 
 interface SectorState {
   lastCheckTime: number;
@@ -19,6 +19,7 @@ interface SectorState {
 
 let traderCount = 0;
 let initialized = false;
+let initialSpawningDone = false;
 
 // Optimization: Cached counts
 const updateCounts = () => {
@@ -33,7 +34,7 @@ const sectorStates = new Map<string, SectorState>();
 export const npcSpawnerSystem = (scene: Phaser.Scene) => {
   const now = scene.time.now;
   const existingNpcs = world.with('aiState');
-  const maxNpcs = 300; // Increased limit
+  const maxNpcs = 300;
 
   // Initialize Sector States if needed
   if (sectorStates.size === 0) {
@@ -59,13 +60,38 @@ export const npcSpawnerSystem = (scene: Phaser.Scene) => {
     initialized = true;
   }
 
-  // 1. Trader Spawning (Baseline Activity)
-  // Simple random spawning to keep economy moving
+  // Initial Fixed Spawn (3 Traders per Sector)
+  if (!initialSpawningDone) {
+    initialSpawningDone = true;
+    SECTORS.forEach((sector) => {
+      for (let i = 0; i < 3; i++) {
+        spawnShip(scene, sector, 'TRADER');
+      }
+    });
+    console.log('[Spawner] Initial Deployment: 3 Traders per sector.');
+  }
+
+  // 1. Trader Spawning (Production Based + Fallback)
   if (existingNpcs.size < maxNpcs) {
-    if (Math.random() < TRADER_SPAWN_RATE) {
-      // Check SPECIFIC Trader Cap (Optimized)
-      const MAX_TRADERS = 250;
-      if (traderCount < MAX_TRADERS) {
+    // A. Production Based (Check Shipyards)
+    const shipyards = world.with('stationType', 'inventory', 'sectorId', 'transform');
+    for (const shipyard of shipyards) {
+      if (shipyard.stationType === 'shipyard' && (shipyard.inventory['spaceship'] || 0) >= 1) {
+        // Produce a ship!
+        shipyard.inventory['spaceship']! -= 1;
+        const s = SECTORS.find((sec) => sec.id === shipyard.sectorId);
+        if (s) {
+          spawnShip(scene, s, 'TRADER', shipyard.transform.x, shipyard.transform.y);
+          // console.log(`[Spawner] Shipyard produced a TRADER in ${s.name}`);
+        }
+      }
+    }
+
+    // B. Fallback (Extinction Prevention)
+    const MIN_TRADERS = 10;
+    // Low chance fallback if population is critically low
+    if (traderCount < MIN_TRADERS) {
+      if (Math.random() < 0.05) {
         spawnTrader(scene);
       }
     }
@@ -80,34 +106,34 @@ export const npcSpawnerSystem = (scene: Phaser.Scene) => {
       const currentWealth = calculateSectorWealth(sector.id);
       const deltaWealth = currentWealth - state.lastTotalWealth;
 
-      console.log(
-        `[Spawner] Checking ${sector.name}: Wealth ${currentWealth} (Delta: ${deltaWealth})`
-      );
-
       // A. Pirate Spawning (Based on Wealth Increase)
-      if (deltaWealth > 0) {
-        const piratesToSpawn = Math.min(
-          Math.floor(deltaWealth / PIRATE_WEALTH_THRESHOLD),
-          MAX_PIRATES_PER_WAVE
-        );
-
-        if (piratesToSpawn > 0) {
-          console.log(
-            `[Spawner] Wealth Spike in ${sector.name}! Attempting to spawn ${piratesToSpawn} Pirates.`
+      // ** CHECK: GRACE PERIOD **
+      if (now > PIRATE_GRACE_PERIOD) {
+        if (deltaWealth > 0) {
+          const piratesToSpawn = Math.min(
+            Math.floor(deltaWealth / PIRATE_WEALTH_THRESHOLD),
+            MAX_PIRATES_PER_WAVE
           );
-          for (let i = 0; i < piratesToSpawn; i++) {
-            if (existingNpcs.size < maxNpcs) {
-              spawnShip(scene, sector, 'PIRATE');
-            } else {
-              console.log('[Spawner] NPC Cap Reached. Skipping Pirate Spawn.');
-              break;
+
+          if (piratesToSpawn > 0) {
+            console.log(
+              `[Spawner] Wealth Spike in ${sector.name}! Attempting to spawn ${piratesToSpawn} Pirates.`
+            );
+            for (let i = 0; i < piratesToSpawn; i++) {
+              if (existingNpcs.size < maxNpcs) {
+                spawnShip(scene, sector, 'PIRATE');
+              } else {
+                break;
+              }
             }
           }
         }
       }
+      /* else {
+         // console.log(`[Spawner] Pirate spawn suppressed (Grace Period: ${(PIRATE_GRACE_PERIOD - now)/1000}s left)`);
+      } */
 
       // B. Bounty Hunter Spawning (Counter-Piracy)
-      // Count pirates in this sector
       let pirateCount = 0;
       for (const e of world.with('faction', 'sectorId')) {
         if (e.faction === 'PIRATE' && e.sectorId === sector.id) {
@@ -116,8 +142,6 @@ export const npcSpawnerSystem = (scene: Phaser.Scene) => {
       }
 
       if (pirateCount > 0) {
-        // Chance to spawn BH based on pirate count
-        // e.g. 3 pirates => 3 checks
         for (let i = 0; i < pirateCount; i++) {
           if (Math.random() < BOUNTY_HUNTER_CHANCE) {
             if (existingNpcs.size < maxNpcs) {
@@ -126,7 +150,6 @@ export const npcSpawnerSystem = (scene: Phaser.Scene) => {
               );
               spawnShip(scene, sector, 'BOUNTY_HUNTER');
             } else {
-              console.log('[Spawner] NPC Cap Reached. Skipping Bounty Hunter Spawn.');
               break;
             }
           }
@@ -176,15 +199,24 @@ const spawnTrader = (scene: Phaser.Scene) => {
 const spawnShip = (
   scene: Phaser.Scene,
   sector: UniverseSector,
-  faction: 'TRADER' | 'PIRATE' | 'BOUNTY_HUNTER'
+  faction: 'TRADER' | 'PIRATE' | 'BOUNTY_HUNTER',
+  startX?: number,
+  startY?: number
 ) => {
   const sectorPos = getSectorWorldPosition(sector);
 
-  // Random Pos in sector
+  let x: number, y: number;
   const angle = Math.random() * Math.PI * 2;
-  const radius = Math.random() * 4000;
-  const x = sectorPos.x + Math.cos(angle) * radius;
-  const y = sectorPos.y + Math.sin(angle) * radius;
+
+  if (startX !== undefined && startY !== undefined) {
+    x = startX;
+    y = startY;
+  } else {
+    // Random Pos in sector
+    const radius = Math.random() * 4000;
+    x = sectorPos.x + Math.cos(angle) * radius;
+    y = sectorPos.y + Math.sin(angle) * radius;
+  }
 
   let spriteKey = 'npc_trader';
   if (faction === 'PIRATE') spriteKey = 'npc_pirate';

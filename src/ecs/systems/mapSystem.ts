@@ -109,17 +109,44 @@ export const mapSystem = (scene: Phaser.Scene, player: { sectorId?: string }) =>
       graphics.fillStyle(0x00ff00, 1);
       graphics.fillCircle(pos.x, pos.y, 4);
     } else if (entity.station) {
-      // Station: Blue Square
-      graphics.fillStyle(0x0088ff, 1);
+      // Station: Varied Colors
+      let color = 0x0088ff; // Default Blue
+      const type = entity.stationType as string;
+      if (type === 'shipyard')
+        color = 0xffffff; // White
+      else if (type && type.startsWith('mining')) {
+        if (type.includes('gas'))
+          color = 0x00ff00; // Green
+        else if (type.includes('crystal'))
+          color = 0xd000ff; // Purple
+        else color = 0x888888; // Grey/White for Ore
+      } else if (type && type.startsWith('factory')) {
+        if (type.includes('fuel'))
+          color = 0xffa500; // Orange
+        else if (type.includes('electronics'))
+          color = 0x00ffff; // Cyan
+        else if (type.includes('engine'))
+          color = 0xff4444; // Red
+        else if (type.includes('sensors'))
+          color = 0x44ff44; // Light Green
+        else color = 0xffff00; // Yellow default
+      }
+
+      graphics.fillStyle(color, 1);
       graphics.fillRect(pos.x - 4, pos.y - 4, 8, 8);
     } else if (entity.gate) {
       // Gate: Purple Circle
       graphics.lineStyle(2, 0xff00ff, 1);
       graphics.strokeCircle(pos.x, pos.y, 4);
     } else if (entity.aiState) {
-      // NPC: Red Dot
-      graphics.fillStyle(0xff0000, 1);
-      graphics.fillCircle(pos.x, pos.y, 2);
+      // NPC: Faction Colors
+      let color = 0xaaaaaa; // Default Grey
+      if (entity.faction === 'TRADER') color = 0x00ff00; // Green (Friendly/Neutral)
+      if (entity.faction === 'PIRATE') color = 0xff0000; // Red (Hostile)
+      if (entity.faction === 'BOUNTY_HUNTER') color = 0xffaa00; // Orange
+
+      graphics.fillStyle(color, 1);
+      graphics.fillCircle(pos.x, pos.y, 3);
     }
   }
 };

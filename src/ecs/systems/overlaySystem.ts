@@ -136,8 +136,8 @@ export const overlaySystem = (scene: Phaser.Scene) => {
           if (itemDef) inventoryValue += (count || 0) * itemDef.basePrice;
         }
       }
-      const total = (station.wallet || 0) + inventoryValue;
-      const msg = `Cash: $${(station.wallet || 0).toFixed(0)}\nAsset: $${inventoryValue.toFixed(0)}\nTotal: $${total.toFixed(0)}`;
+      // const total = (station.wallet || 0) + inventoryValue;
+      const msg = `${station.name || 'Station'}\nCash: $${(station.wallet || 0).toFixed(0)}\nAsset: $${inventoryValue.toFixed(0)}`;
 
       if (station.textOverlay.text !== msg) station.textOverlay.setText(msg);
     }

@@ -62,6 +62,9 @@ export class MainScene extends Phaser.Scene {
     this.load.image('station', 'assets/station_trade.png');
     this.load.image('station_factory', 'assets/station_factory.png');
     this.load.image('station_mining', 'assets/station_mining.png');
+    this.load.image('station_industry', 'assets/station_industry.png');
+    this.load.image('station_equipments', 'assets/station_equipments.png');
+    this.load.image('station_shipyard', 'assets/station_shipyard.png');
     this.load.image('npc_trader', 'assets/npc_trader_B.png'); // Default (Empty)
     this.load.image('npc_trader_full', 'assets/npc_trader_A.png'); // Loaded
     this.load.image('npc_pirate', 'assets/npc_pirate.png');
