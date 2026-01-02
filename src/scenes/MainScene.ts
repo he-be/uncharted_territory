@@ -48,12 +48,18 @@ export class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('ship', 'assets/ship_nobg.png');
-    this.load.image('station', 'assets/station_nobg.png');
-    this.load.image('station_factory', 'assets/station_factory_nobg.png');
-    this.load.image('station_mining', 'assets/station_mining_nobg.png');
-    this.load.image('npc_trader', 'assets/npc_trader_nobg.png');
-    this.load.image('npc_pirate', 'assets/npc_pirate_nobg.png');
+    this.load.image('ship', 'assets/player_ship.png');
+    this.load.image('station', 'assets/station_trade.png');
+    this.load.image('station_factory', 'assets/station_factory.png');
+    this.load.image('station_mining', 'assets/station_mining.png');
+    this.load.image('npc_trader', 'assets/npc_trader_B.png'); // Default (Empty)
+    this.load.image('npc_trader_full', 'assets/npc_trader_A.png'); // Loaded
+    this.load.image('npc_pirate', 'assets/npc_pirate.png');
+    this.load.image('gate', 'assets/gate.png');
+    this.load.image('asteroid', 'assets/asteroid.png');
+    this.load.image('kraken', 'assets/kraken.png');
+    this.load.image('projectile_laser', 'assets/projectile_laser.png');
+    this.load.image('effect_shield', 'assets/effect_shield.png');
   }
 
   create() {
@@ -97,7 +103,7 @@ export class MainScene extends Phaser.Scene {
 
     // 3. Player
     const playerSprite = this.add.sprite(400, 300, 'ship');
-    playerSprite.setScale(0.1);
+    playerSprite.setScale(0.15);
     playerSprite.setDepth(10);
 
     this.playerEntity = {
@@ -169,7 +175,7 @@ export class MainScene extends Phaser.Scene {
     sectorId: string
   ) {
     const sprite = this.add.sprite(x, y, key);
-    sprite.setScale(0.5);
+    sprite.setScale(0.25);
     sprite.setDepth(1);
 
     const config = STATION_CONFIGS[type];
@@ -200,7 +206,9 @@ export class MainScene extends Phaser.Scene {
     myId: string
   ) {
     // Re-use station sprite but tinted blue for now, or use shape
-    const sprite = this.add.circle(x, y, 50, 0x00ffff, 0.5); // Larger, transparent
+    // Gate Sprite
+    const sprite = this.add.sprite(x, y, 'gate');
+    sprite.setScale(0.2); // 1/4 of previous 0.8
     sprite.setDepth(1);
 
     world.add({

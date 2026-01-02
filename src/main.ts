@@ -21,6 +21,11 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
+  render: {
+    antialias: true,
+    pixelArt: false,
+    roundPixels: false,
+  },
 };
 
 new Phaser.Game(config);

@@ -289,6 +289,10 @@ export const aiSystem = (_delta: number) => {
             if (entity.totalProfit === undefined) entity.totalProfit = 0;
             entity.totalProfit -= cost;
             route.state = 'MOVING_TO_SELL';
+            // Visual Update: Loaded
+            if (entity.sprite && 'setTexture' in entity.sprite) {
+              (entity.sprite as Phaser.GameObjects.Sprite).setTexture('npc_trader_full');
+            }
           } else {
             entity.aiState = 'PLANNING';
             entity.tradeRoute = undefined;
@@ -305,6 +309,11 @@ export const aiSystem = (_delta: number) => {
             if (!targetEntity.inventory![route.itemId]) targetEntity.inventory![route.itemId] = 0;
             targetEntity.inventory![route.itemId]! += amount;
             entity.cargo![route.itemId] = 0;
+
+            // Visual Update: Empty
+            if (entity.sprite && 'setTexture' in entity.sprite) {
+              (entity.sprite as Phaser.GameObjects.Sprite).setTexture('npc_trader');
+            }
             if (entity.totalProfit === undefined) entity.totalProfit = 0;
             entity.totalProfit += revenue;
           }
