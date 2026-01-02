@@ -60,6 +60,7 @@ export class MainScene extends Phaser.Scene {
     this.load.image('npc_trader', 'assets/npc_trader_B.png'); // Default (Empty)
     this.load.image('npc_trader_full', 'assets/npc_trader_A.png'); // Loaded
     this.load.image('npc_pirate', 'assets/npc_pirate.png');
+    this.load.image('npc_fighter', 'assets/npc_fighter.png');
     this.load.image('gate', 'assets/gate.png');
     this.load.image('asteroid', 'assets/asteroid.png');
     this.load.image('kraken', 'assets/kraken.png');
@@ -138,7 +139,7 @@ export class MainScene extends Phaser.Scene {
     // Camera Init
     this.cameras.main.startFollow(playerSprite);
     this.cameras.main.setZoom(this.currentZoom);
-    this.cameras.main.setBounds(-500000, -500000, 2000000, 2000000); // Expand camera bounds for Vast Universe
+    this.cameras.main.setBounds(-500000, -500000, 3000000, 3000000); // Expanded for Sector 12 (1.6M)
 
     // Debug HUD
     this.debugText = this.add.text(10, 10, '', { font: '16px monospace', color: '#00ff00' });
@@ -280,11 +281,18 @@ export class MainScene extends Phaser.Scene {
       });
 
       // NPC Systems
+      const npcStart = performance.now();
       npcSpawnerSystem(this, delta);
+      const npcTime = performance.now() - npcStart;
+
+      const combatStart = performance.now();
       combatSystem(this, delta);
+      const combatTime = performance.now() - combatStart;
 
       // AutoPilot
+      // const apStart = performance.now();
       autoPilotSystem(this.playerEntity, delta);
+      // const apTime = performance.now() - apStart;
 
       const aiStart = performance.now();
       aiSystem(delta);
@@ -296,7 +304,9 @@ export class MainScene extends Phaser.Scene {
       const ecoTime = performance.now() - ecoStart;
 
       // Analytics
+      // const anStart = performance.now();
       analyticsSystem(time);
+      // const anTime = performance.now() - anStart;
 
       // UI/Overlay
       const ovStart = performance.now();
@@ -336,7 +346,6 @@ export class MainScene extends Phaser.Scene {
       }
 
       // Phase 4: Gate & Render Systems
-      // Phase 4: Gate & Render Systems
       gateSystem(this.playerEntity);
       // mapSystem moved to UIScene
       renderSystem(this.playerEntity);
@@ -344,7 +353,7 @@ export class MainScene extends Phaser.Scene {
       const totalFrameTime = performance.now() - frameStart;
       if (totalFrameTime > 33) {
         console.warn(
-          `Long Frame: ${totalFrameTime.toFixed(2)}ms | AI: ${aiTime.toFixed(2)} | Eco: ${ecoTime.toFixed(2)} | Ov: ${ovTime.toFixed(2)}`
+          `Long Frame: ${totalFrameTime.toFixed(2)}ms | NPC: ${npcTime.toFixed(2)} | Cbt: ${combatTime.toFixed(2)} | AI: ${aiTime.toFixed(2)} | Eco: ${ecoTime.toFixed(2)} | Ov: ${ovTime.toFixed(2)}`
         );
       }
 
@@ -434,10 +443,7 @@ export class MainScene extends Phaser.Scene {
           // Frontier: Sparse, mixed
           stationMix = ['mining', 'trading'];
           break;
-        case 'pirate':
-          // Pirate: Hideouts (using mining visual for now or trading)
-          stationMix = ['trading', 'mining'];
-          break;
+
         default:
           stationMix = ['trading'];
       }

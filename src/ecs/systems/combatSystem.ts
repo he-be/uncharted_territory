@@ -49,21 +49,20 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
   if (now - lastTargetSearch > TARGET_SEARCH_INTERVAL) {
     lastTargetSearch = now;
 
-    // Potential targets: Non-Pirate ships with cargo/money
+    // Potential targets: All ships with combat capability or loot
     const potentialTargets: Entity[] = [];
-    for (const e of world.with('combatStats', 'totalProfit', 'transform', 'sectorId')) {
-      if (e.faction !== 'PIRATE') {
-        potentialTargets.push(e);
-      }
+    for (const e of world.with('combatStats', 'transform', 'sectorId', 'faction')) {
+      potentialTargets.push(e);
     }
 
-    for (const pirate of pirates) {
-      if (pirate.faction !== 'PIRATE') continue; // Failsafe
+    // Iterate all "Aggressors" (Pirates and Bounty Hunters)
+    for (const attacker of pirates) {
+      if (attacker.faction === 'TRADER') continue; // Traders are passive
 
       // if ALREADY in an encounter, skip targeting
-      if (pirate.combatEncounter) continue;
+      if (attacker.combatEncounter) continue;
 
-      const currentTarget = pirate.combatTarget ? entityMap.get(pirate.combatTarget) : null;
+      const currentTarget = attacker.combatTarget ? entityMap.get(attacker.combatTarget) : null;
 
       if (!currentTarget || !currentTarget.combatStats || currentTarget.combatStats.hp <= 0) {
         // Find new target
@@ -71,20 +70,42 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
         let bestScore = -1;
 
         for (const target of potentialTargets) {
-          if (target.sectorId !== pirate.sectorId) continue;
+          if (target.id === attacker.id) continue;
+          if (target.sectorId !== attacker.sectorId) continue;
           if (!target.transform) continue;
-          // Don't target ships already in an encounter
-          if (target.combatEncounter) continue;
+          if (target.combatEncounter) continue; // Don't interrupt
+
+          // Faction Check
+          let isValidTarget = false;
+          if (attacker.faction === 'PIRATE') {
+            // Pirates attack Traders (Loot) and Bounty Hunters (Threat)
+            if (target.faction === 'TRADER' || target.faction === 'BOUNTY_HUNTER')
+              isValidTarget = true;
+          } else if (attacker.faction === 'BOUNTY_HUNTER') {
+            // Bounty Hunters attack Pirates
+            if (target.faction === 'PIRATE') isValidTarget = true;
+          }
+
+          if (!isValidTarget) continue;
 
           const dist = Phaser.Math.Distance.Between(
-            pirate.transform.x,
-            pirate.transform.y,
+            attacker.transform.x,
+            attacker.transform.y,
             target.transform.x,
             target.transform.y
           );
 
-          const profitScore = Math.max(0, target.totalProfit || 0) + 100;
-          const score = profitScore / (dist + 100);
+          // Scoring
+          // Pirates love money, but also close targets
+          // BH just want to kill pirates
+          let score = 0;
+          if (attacker.faction === 'PIRATE') {
+            const profitScore = Math.max(0, target.totalProfit || 0) + 100;
+            score = profitScore / (dist + 100);
+          } else {
+            // Bounty Hunter: Proximity is king
+            score = 10000 / (dist + 10);
+          }
 
           if (score > bestScore) {
             bestScore = score;
@@ -93,34 +114,34 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
         }
 
         if (bestTarget) {
-          pirate.combatTarget = bestTarget.id;
+          attacker.combatTarget = bestTarget.id;
         }
       }
     }
   }
 
   // 3. Combat Movement and Resolution
-  for (const pirate of pirates) {
-    if (pirate.faction !== 'PIRATE') continue;
+  for (const attacker of pirates) {
+    if (attacker.faction === 'TRADER') continue; // Skip Traders
 
     // --- ENCOUNTER START / CHASE ---
-    if (!pirate.combatEncounter && pirate.combatTarget) {
-      const target = entityMap.get(pirate.combatTarget);
+    if (!attacker.combatEncounter && attacker.combatTarget) {
+      const target = entityMap.get(attacker.combatTarget);
 
       if (
         !target ||
         !target.transform ||
-        target.sectorId !== pirate.sectorId ||
+        target.sectorId !== attacker.sectorId ||
         target.combatEncounter
       ) {
         // Target invalid or taken
-        pirate.combatTarget = undefined;
+        attacker.combatTarget = undefined;
         continue;
       }
 
       const dist = Phaser.Math.Distance.Between(
-        pirate.transform.x,
-        pirate.transform.y,
+        attacker.transform.x,
+        attacker.transform.y,
         target.transform.x,
         target.transform.y
       );
@@ -128,21 +149,21 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
       if (dist > COMBAT_RANGE) {
         // Chase
         const angle = Math.atan2(
-          target.transform.y - pirate.transform.y,
-          target.transform.x - pirate.transform.x
+          target.transform.y - attacker.transform.y,
+          target.transform.x - attacker.transform.x
         );
-        const speed = pirate.speedStats?.maxSpeed || 150;
+        const speed = attacker.speedStats?.maxSpeed || 150;
 
-        if (pirate.velocity) {
-          pirate.velocity.vx = Math.cos(angle) * speed;
-          pirate.velocity.vy = Math.sin(angle) * speed;
-          pirate.transform.rotation = angle;
+        if (attacker.velocity) {
+          attacker.velocity.vx = Math.cos(angle) * speed;
+          attacker.velocity.vy = Math.sin(angle) * speed;
+          attacker.transform.rotation = angle;
         }
       } else {
         // ENTER COMBAT ENCOUNTER (LOCK)
-        if (pirate.velocity) {
-          pirate.velocity.vx = 0;
-          pirate.velocity.vy = 0;
+        if (attacker.velocity) {
+          attacker.velocity.vx = 0;
+          attacker.velocity.vy = 0;
         }
         if (target.velocity) {
           target.velocity.vx = 0;
@@ -150,53 +171,53 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
         }
 
         const encounterId = uuidv4();
-        const centerX = (pirate.transform.x + target.transform.x) / 2;
-        const centerY = (pirate.transform.y + target.transform.y) / 2;
+        const centerX = (attacker.transform.x + target.transform.x) / 2;
+        const centerY = (attacker.transform.y + target.transform.y) / 2;
 
         // Create Zone Entity
         world.add({
           id: encounterId,
           transform: { x: centerX, y: centerY, rotation: 0 },
-          sectorId: pirate.sectorId,
+          sectorId: attacker.sectorId,
           encounterZone: {
             radius: 200,
             center: { x: centerX, y: centerY }, // Stored for convenience, strictly redundant with transform
-            participants: [pirate.id, target.id],
+            participants: [attacker.id, target.id],
           },
         });
 
         // Critical: Set AI State to COMBAT to stop aiSystem from moving them
-        pirate.aiState = 'COMBAT';
+        attacker.aiState = 'COMBAT';
         if (target.aiState) target.aiState = 'COMBAT';
 
-        pirate.combatEncounter = { encounterId: encounterId, role: 'ATTACKER' };
+        attacker.combatEncounter = { encounterId: encounterId, role: 'ATTACKER' };
         target.combatEncounter = { encounterId: encounterId, role: 'DEFENDER' };
       }
     }
 
     // --- ENCOUNTER UPDATE (FIGHT) ---
-    if (pirate.combatEncounter && pirate.combatTarget) {
-      const target = entityMap.get(pirate.combatTarget);
+    if (attacker.combatEncounter && attacker.combatTarget) {
+      const target = entityMap.get(attacker.combatTarget);
 
       // Check validity
       if (
         target &&
         target.combatEncounter &&
-        target.combatEncounter.encounterId === pirate.combatEncounter.encounterId
+        target.combatEncounter.encounterId === attacker.combatEncounter.encounterId
       ) {
         // RE-ENFORCE LOCK EVERY FRAME (In case physics/other systems nudged them)
-        if (pirate.velocity) {
-          pirate.velocity.vx = 0;
-          pirate.velocity.vy = 0;
+        if (attacker.velocity) {
+          attacker.velocity.vx = 0;
+          attacker.velocity.vy = 0;
         }
         if (target.velocity) {
           target.velocity.vx = 0;
           target.velocity.vy = 0;
         }
 
-        const lastFire = entityCooldowns.get(pirate.id) || 0;
+        const lastFire = entityCooldowns.get(attacker.id) || 0;
         if (now - lastFire > FIRE_COOLDOWN) {
-          entityCooldowns.set(pirate.id, now);
+          entityCooldowns.set(attacker.id, now);
 
           // Deal Damage
           if (target.combatStats) {
@@ -215,17 +236,20 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
 
             // Check Death
             if (target.combatStats.hp <= 0) {
-              // LOOTING
-              const loot = Math.max(0, target.totalProfit || 0);
-              if (!pirate.piracy) pirate.piracy = { revenue: 0 };
-              pirate.piracy.revenue += loot;
-
-              console.log(
-                `[Combat] ${pirate.id} destroyed ${target.id} and looted ${loot} credits!`
-              );
+              // LOOTING (Only Pirates loot money)
+              if (attacker.faction === 'PIRATE') {
+                const loot = Math.max(0, target.totalProfit || 0);
+                if (!attacker.piracy) attacker.piracy = { revenue: 0 };
+                attacker.piracy.revenue += loot;
+                console.log(
+                  `[Combat] Pirate ${attacker.id} looted ${loot} from ${target.faction}!`
+                );
+              } else {
+                console.log(`[Combat] ${attacker.faction} destroyed ${target.faction}!`);
+              }
 
               // Cleanup Encounter Zone
-              const encounterId = pirate.combatEncounter.encounterId;
+              const encounterId = attacker.combatEncounter.encounterId;
               const zone = entityMap.get(encounterId);
               if (zone) {
                 if (zone.textOverlay) zone.textOverlay.destroy();
@@ -242,18 +266,18 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
               world.remove(target);
               entityCooldowns.delete(target.id);
 
-              // Reset Pirate
-              pirate.combatTarget = undefined;
-              pirate.combatEncounter = undefined;
-              pirate.aiState = 'PLANNING'; // Resume hunting
+              // Reset Attacker
+              attacker.combatTarget = undefined;
+              attacker.combatEncounter = undefined;
+              attacker.aiState = 'PLANNING'; // Resume hunting
             }
           }
         }
       } else {
         // Encounter Broken (Target Lost/Fled/Bug)
         // Clean up zone
-        if (pirate.combatEncounter) {
-          const encounterId = pirate.combatEncounter.encounterId;
+        if (attacker.combatEncounter) {
+          const encounterId = attacker.combatEncounter.encounterId;
           const zone = entityMap.get(encounterId);
           if (zone) {
             if (zone.textOverlay) zone.textOverlay.destroy();
@@ -261,9 +285,9 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
           }
         }
 
-        pirate.combatEncounter = undefined;
-        pirate.combatTarget = undefined;
-        pirate.aiState = 'PLANNING';
+        attacker.combatEncounter = undefined;
+        attacker.combatTarget = undefined;
+        attacker.aiState = 'PLANNING';
       }
     }
   }

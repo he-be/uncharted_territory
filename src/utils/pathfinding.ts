@@ -1,7 +1,14 @@
 import { CONNECTIONS } from '../data/universe';
 
+const pathCache = new Map<string, string[] | null>();
+
 export const findPath = (startSectorId: string, endSectorId: string): string[] | null => {
   if (startSectorId === endSectorId) return [];
+
+  const cacheKey = `${startSectorId}->${endSectorId}`;
+  if (pathCache.has(cacheKey)) {
+    return pathCache.get(cacheKey)!;
+  }
 
   const queue: { id: string; path: string[] }[] = [{ id: startSectorId, path: [] }];
   const visited = new Set<string>();
@@ -18,7 +25,9 @@ export const findPath = (startSectorId: string, endSectorId: string): string[] |
 
     for (const neighborId of neighbors) {
       if (neighborId === endSectorId) {
-        return [...current.path, neighborId];
+        const fullPath = [...current.path, neighborId];
+        pathCache.set(cacheKey, fullPath);
+        return fullPath;
       }
 
       if (!visited.has(neighborId)) {
@@ -28,5 +37,6 @@ export const findPath = (startSectorId: string, endSectorId: string): string[] |
     }
   }
 
+  pathCache.set(cacheKey, null);
   return null;
 };

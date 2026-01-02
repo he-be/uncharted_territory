@@ -1,4 +1,5 @@
 import { world, type Entity } from '../world';
+import Phaser from 'phaser';
 import { calculatePrice } from '../../utils/economyUtils';
 import { STATION_CONFIGS, type StationType } from '../../data/stations';
 
@@ -49,45 +50,26 @@ export const aiSystem = (_delta: number) => {
     if (!from.sectorId || !to.sectorId || !from.transform || !to.transform) return null;
 
     if (from.sectorId === to.sectorId) {
-      const dist =
-        typeof Phaser !== 'undefined'
-          ? Phaser.Math.Distance.Between(
-              from.transform.x,
-              from.transform.y,
-              to.transform.x,
-              to.transform.y
-            )
-          : Math.sqrt(
-              Math.pow(from.transform.x - to.transform.x, 2) +
-                Math.pow(from.transform.y - to.transform.y, 2)
-            );
+      // Same Sector
+      const dist = Phaser.Math.Distance.Between(
+        from.transform.x,
+        from.transform.y,
+        to.transform.x,
+        to.transform.y
+      );
       return dist / maxSpeed;
     } else {
       // Multi-sector
-      const sectorGates = gateCache.get(from.sectorId);
-      if (!sectorGates) {
-        return null;
-      }
+      const path = findPath(from.sectorId, to.sectorId);
+      if (!path || path.length === 0) return null;
 
-      const validGate = sectorGates.find((g) => g.gate?.destinationSectorId === to.sectorId);
-      if (!validGate || !validGate.transform) {
-        return null;
-      }
+      // Estimate: (Path Hops * Average Sector Cross Time) + (Path Hops * Jump Penalty)
+      // This is an approximation as we don't know exact gate positions for every hop without traversing
+      const sectorWidth = 2000; // Approx average distance to gate
+      const totalDist = path.length * sectorWidth;
+      const totalPenalty = path.length * JUMP_TIME_PENALTY;
 
-      const distToGate =
-        typeof Phaser !== 'undefined'
-          ? Phaser.Math.Distance.Between(
-              from.transform.x,
-              from.transform.y,
-              validGate.transform.x,
-              validGate.transform.y
-            )
-          : Math.sqrt(
-              Math.pow(from.transform.x - validGate.transform.x, 2) +
-                Math.pow(from.transform.y - validGate.transform.y, 2)
-            );
-
-      return distToGate / maxSpeed + JUMP_TIME_PENALTY / maxSpeed;
+      return totalDist / maxSpeed + totalPenalty / maxSpeed;
     }
   };
 
@@ -104,8 +86,8 @@ export const aiSystem = (_delta: number) => {
     // If in combat, skip AI movement (Lock-in)
     if (entity.combatEncounter) continue;
 
-    // Pirates use combatSystem for logic, not this trade AI
-    if (entity.faction === 'PIRATE') continue;
+    // Pirates use combatSystem for logic, not this trade AI. Bounty Hunters also skip trade.
+    if (entity.faction === 'PIRATE' || entity.faction === 'BOUNTY_HUNTER') continue;
 
     const maxSpeed = entity.speedStats.maxSpeed;
 
