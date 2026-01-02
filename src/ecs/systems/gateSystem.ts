@@ -27,6 +27,17 @@ export const gateSystem = (player: Entity) => {
       gateEntity.transform.y
     );
 
+    // Re-entry Protection logic
+    if (player.lastGateId === gateEntity.id) {
+      // If we are still close to the last used gate, ignore it.
+      if (dist < 300) {
+        continue;
+      } else {
+        // We have moved far enough away, clear the flag
+        player.lastGateId = undefined;
+      }
+    }
+
     if (dist < 50) {
       // Close enough to jump
       const destSector = gateEntity.gate.destinationSectorId;
@@ -47,12 +58,12 @@ export const gateSystem = (player: Entity) => {
         console.log(`[Gate] Jumping to ${destSector} via ${destGateId}`);
         player.sectorId = destSector;
 
+        // Set Last Gate ID to the DESTINATION gate (so we don't immediately jump back)
+        player.lastGateId = targetGate.id;
+
         // Warp to Target Gate + Offset (to avoid infinite loop)
-        // Assume exit vector? Or just generic offset?
-        // Let's offset by 150 units in X direction away from gate?
-        // Or simply: Teleport to Gate Pos
-        player.transform.x = targetGate.transform.x + 100;
-        player.transform.y = targetGate.transform.y + 100;
+        player.transform.x = targetGate.transform.x;
+        player.transform.y = targetGate.transform.y;
 
         // Stop movement
         if (player.velocity) {

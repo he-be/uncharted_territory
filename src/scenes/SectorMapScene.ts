@@ -1,16 +1,20 @@
 import Phaser from 'phaser';
 import { world } from '../ecs/world';
+import { SECTORS, CONNECTIONS } from '../data/universe';
 
 export class SectorMapScene extends Phaser.Scene {
   private playerSectorId: string | null = null;
   private graphics!: Phaser.GameObjects.Graphics;
   private closeKey!: Phaser.Input.Keyboard.Key;
+  private textGroup!: Phaser.GameObjects.Group;
 
   constructor() {
     super({ key: 'SectorMapScene' });
   }
 
   create() {
+    this.textGroup = this.add.group();
+
     // Semi-transparent background
     this.add.rectangle(400, 300, 800, 600, 0x000000, 0.8).setOrigin(0.5);
 
@@ -61,19 +65,23 @@ export class SectorMapScene extends Phaser.Scene {
   }
 
   private drawMap() {
-    // Ideally, get this from World/Config. For now, hardcoded layout based on MainScene.
-    const nodes = [
-      { id: 'sector-a', x: 200, y: 300, label: 'Sector A\n(Production)' },
-      { id: 'sector-b', x: 600, y: 300, label: 'Sector B\n(Market)' },
-    ];
+    const nodes = SECTORS.map((s) => ({
+      id: s.id,
+      x: s.x,
+      y: s.y,
+      label: s.name,
+    }));
 
-    const edges = [{ from: 'sector-a', to: 'sector-b' }];
-
+    const edges = CONNECTIONS.map((c) => ({
+      from: c.from,
+      to: c.to,
+    }));
     // Find Player Sector
     const player = world.with('playerControl', 'sectorId').first;
     this.playerSectorId = player ? player.sectorId || null : null;
 
     this.graphics.clear();
+    this.textGroup.clear(true, true); // Clear and destroy children
 
     // Draw Edges
     this.graphics.lineStyle(2, 0x444444);
@@ -103,22 +111,24 @@ export class SectorMapScene extends Phaser.Scene {
       this.graphics.strokeCircle(node.x, node.y, radius);
 
       // Label
-      this.add
+      const label = this.add
         .text(node.x, node.y + radius + 10, node.label, {
           fontSize: '14px',
           color: '#ffffff',
           align: 'center',
         })
         .setOrigin(0.5, 0);
+      this.textGroup.add(label);
 
       if (isPlayerHere) {
-        this.add
+        const youLabel = this.add
           .text(node.x, node.y, 'YOU', {
             fontSize: '12px',
             color: '#000000',
             fontStyle: 'bold',
           })
           .setOrigin(0.5);
+        this.textGroup.add(youLabel);
       }
     }
   }

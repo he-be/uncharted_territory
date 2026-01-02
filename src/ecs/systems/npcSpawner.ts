@@ -1,5 +1,6 @@
 import { world } from '../world';
 import { v4 as uuidv4 } from 'uuid';
+import { SECTORS } from '../../data/universe';
 
 const SPAWN_INTERVAL = 10000; // 10 seconds
 let lastSpawnTime = 0;
@@ -37,7 +38,7 @@ export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
         wallet: 1000,
         totalProfit: 0,
         target: undefined,
-        sectorId: 'sector-a', // Spawn in Sector A
+        sectorId: SECTORS[Math.floor(Math.random() * SECTORS.length)].id,
       });
       console.log(`[NPC Spawner] Spawned new NPC. Total: ${existingNpcs.size + 1}`);
     }

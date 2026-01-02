@@ -45,6 +45,7 @@ export type Entity = {
 
   // Location
   sectorId?: string;
+  lastGateId?: string; // ID of the last gate used (to prevent immediate re-entry)
 
   // Gate
   gate?: {
