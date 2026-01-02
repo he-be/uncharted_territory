@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { world } from '../ecs/world';
 import { SECTORS, CONNECTIONS } from '../data/universe';
+import { findPath } from '../utils/pathfinding';
 
 export class SectorMapScene extends Phaser.Scene {
   private playerSectorId: string | null = null;
@@ -106,6 +107,18 @@ export class SectorMapScene extends Phaser.Scene {
       this.graphics.fillStyle(color, 1);
       this.graphics.fillCircle(node.x, node.y, radius);
 
+      // Hit Area (invisible circle for interaction)
+      // Since Graphics can't easily accept input per-shape, we create a zone or check bounds on click?
+      // Better: Create an interactive Zone or Shape overlay for input.
+      const zone = this.add.circle(node.x, node.y, radius).setInteractive();
+      zone.on('pointerdown', () => {
+        this.navigateToSector(node.id);
+      });
+      // Need to clean this up manually if we redraw?
+      // Yes. Group approach for hit areas too?
+      // Or just clear before redraw.
+      this.textGroup.add(zone as unknown as Phaser.GameObjects.GameObject); // Hacky way to ensure it gets destroyed on clear
+
       // Border
       this.graphics.lineStyle(2, 0xffffff);
       this.graphics.strokeCircle(node.x, node.y, radius);
@@ -130,6 +143,22 @@ export class SectorMapScene extends Phaser.Scene {
           .setOrigin(0.5);
         this.textGroup.add(youLabel);
       }
+    }
+  }
+
+  private navigateToSector(targetId: string) {
+    const player = world.with('playerControl', 'sectorId', 'autoPilot').first;
+    if (!player || !player.sectorId || !player.autoPilot) return;
+
+    const path = findPath(player.sectorId, targetId);
+    if (path && path.length > 0) {
+      console.log(`[Map] Course Set: ${path.join(' -> ')}`);
+      player.autoPilot.pathQueue = path;
+      player.autoPilot.targetX = undefined; // Clear local override
+      player.autoPilot.targetY = undefined;
+      player.autoPilot.state = 'ALIGNING';
+
+      this.closeMap();
     }
   }
 }

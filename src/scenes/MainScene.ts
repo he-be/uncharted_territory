@@ -9,6 +9,7 @@ import { economySystem } from '../ecs/systems/economy';
 import { overlaySystem } from '../ecs/systems/overlaySystem';
 import { renderSystem } from '../ecs/systems/renderSystem';
 import { gateSystem } from '../ecs/systems/gateSystem';
+import { autoPilotSystem } from '../ecs/systems/autoPilot';
 import { STATION_CONFIGS, type StationType } from '../data/stations';
 import { ITEMS, type ItemId } from '../data/items';
 import { calculatePrice } from '../utils/economyUtils';
@@ -119,6 +120,7 @@ export class MainScene extends Phaser.Scene {
       sprite: playerSprite,
       playerControl: true,
       sectorId: 'sector-1', // Initial sector assignment
+      autoPilot: { state: 'IDLE' },
     };
     world.add(this.playerEntity);
 
@@ -241,8 +243,33 @@ export class MainScene extends Phaser.Scene {
       // Always run these (unless paused globally)
       movementSystem(delta);
 
+      // AutoPilot Click
+      this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        // Ignore clicks on UI (if feasible, otherwise just check coordinates/depth)
+        // Convert screen to world
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+
+        if (this.playerEntity.autoPilot) {
+          this.playerEntity.autoPilot.targetX = worldPoint.x;
+          this.playerEntity.autoPilot.targetY = worldPoint.y;
+          this.playerEntity.autoPilot.pathQueue = []; // specific click clears route
+          this.playerEntity.autoPilot.state = 'ALIGNING';
+          console.log(
+            `[AutoPilot] Set target to ${worldPoint.x.toFixed(0)}, ${worldPoint.y.toFixed(0)}`
+          );
+
+          // Check if clicked an entity? (e.g. gate)
+          // Ideally we raycast, but simple proximity for now:
+          const entities = world.with('transform', 'interactionRadius'); // Broad phase
+          // (omitted for brevity, simple coord move is enough for now)
+        }
+      });
+
       // NPC Systems
       npcSpawnerSystem(this, delta);
+
+      // AutoPilot
+      autoPilotSystem(this.playerEntity, delta);
 
       const aiStart = performance.now();
       aiSystem(delta);
@@ -362,60 +389,167 @@ export class MainScene extends Phaser.Scene {
   generateUniverse() {
     // 1. Generate Stations per Sector
     SECTORS.forEach((sector) => {
-      // Simple logic for now: 1-3 stations per sector based on type
-      // Random offset for each sector to make them "feel" far apart in physics space
-
       const pos = getSectorWorldPosition(sector);
       const sectorCX = pos.x;
       const sectorCY = pos.y;
 
-      let stationCount = 1;
-      if (sector.type === 'core') stationCount = 3;
-      if (sector.type === 'industrial') stationCount = 2;
+      // Define mix based on sector type
+      let stationMix: StationType[] = [];
 
-      for (let i = 0; i < stationCount; i++) {
-        const type = this.getStationTypeForSector(sector.type);
-        const x = sectorCX + (Math.random() - 0.5) * 4000;
-        const y = sectorCY + (Math.random() - 0.5) * 4000;
+      switch (sector.type) {
+        case 'core':
+          // Core: Heavy Trade, some Industry
+          stationMix = ['trading', 'trading', 'factory'];
+          break;
+        case 'industrial':
+          // Industrial: Factories
+          stationMix = ['factory', 'factory', 'mining'];
+          break;
+        case 'mining':
+          // Mining: Mining
+          stationMix = ['mining', 'mining', 'mining'];
+          break;
+        case 'frontier':
+          // Frontier: Sparse, mixed
+          stationMix = ['mining', 'trading'];
+          break;
+        case 'pirate':
+          // Pirate: Hideouts (using mining visual for now or trading)
+          stationMix = ['trading', 'mining'];
+          break;
+        default:
+          stationMix = ['trading'];
+      }
+
+      stationMix.forEach((type, index) => {
+        // Spread stations out but keep within sector bounds (inner ring compared to gates)
+        const radius = 2000;
+        const angle = (Math.PI * 2 * index) / stationMix.length; // Even distribution
+
+        const x = sectorCX + Math.cos(angle) * radius + (Math.random() - 0.5) * 500;
+        const y = sectorCY + Math.sin(angle) * radius + (Math.random() - 0.5) * 500;
+
         this.createStation(
           this.getStationSpriteKey(type),
           x,
           y,
-          `${sector.name} Station ${i + 1}`,
+          `${sector.name} ${type.charAt(0).toUpperCase() + type.slice(1)} ${index + 1}`,
           type,
           sector.id
         );
-      }
+      });
     });
 
-    // 2. Generate Gates
+    // 2. Generate Gates (Distribution Strategy: One per Direction)
+    // Pass 1: Collect all connections per sector
+    const sectorConnections = new Map<
+      string,
+      Array<{
+        targetSectorId: string;
+        gateId: string;
+        targetGateId: string;
+        dx: number;
+        dy: number;
+      }>
+    >();
+
     CONNECTIONS.forEach((conn) => {
-      const sectorA = SECTORS.find((s) => s.id === conn.from);
-      const sectorB = SECTORS.find((s) => s.id === conn.to);
-      if (!sectorA || !sectorB) return;
+      const sA = SECTORS.find((s) => s.id === conn.from);
+      const sB = SECTORS.find((s) => s.id === conn.to);
+      if (!sA || !sB) return;
 
-      const posA = getSectorWorldPosition(sectorA);
-      const posB = getSectorWorldPosition(sectorB);
+      const gidA = `gate-${conn.from}-${conn.to}`;
+      const gidB = `gate-${conn.to}-${conn.from}`;
 
-      const centerAx = posA.x;
-      const centerAy = posA.y;
-      const centerBx = posB.x;
-      const centerBy = posB.y;
+      if (!sectorConnections.has(conn.from)) sectorConnections.set(conn.from, []);
+      if (!sectorConnections.has(conn.to)) sectorConnections.set(conn.to, []);
 
-      // Gate positions (far from center)
-      // Gate A (in From Sector)
-      const ax = centerAx + (Math.random() - 0.5) * 6000 + (Math.random() > 0.5 ? 2000 : -2000);
-      const ay = centerAy + (Math.random() - 0.5) * 6000;
+      sectorConnections.get(conn.from)!.push({
+        targetSectorId: conn.to,
+        gateId: gidA,
+        targetGateId: gidB,
+        dx: sB.x - sA.x,
+        dy: sB.y - sA.y,
+      });
 
-      // Gate B (in To Sector)
-      const bx = centerBx + (Math.random() - 0.5) * 6000 + (Math.random() > 0.5 ? 2000 : -2000);
-      const by = centerBy + (Math.random() - 0.5) * 6000;
+      sectorConnections.get(conn.to)!.push({
+        targetSectorId: conn.from,
+        gateId: gidB,
+        targetGateId: gidA,
+        dx: sA.x - sB.x,
+        dy: sA.y - sB.y,
+      });
+    });
 
-      const gateIdA = `gate-${conn.from}-${conn.to}`;
-      const gateIdB = `gate-${conn.to}-${conn.from}`;
+    // Pass 2: Assign Slots
+    const SECTOR_SIZE = 5000;
 
-      this.createGate(ax, ay, conn.from, conn.to, gateIdB, gateIdA);
-      this.createGate(bx, by, conn.to, conn.from, gateIdA, gateIdB);
+    sectorConnections.forEach((conns, sectorId) => {
+      const sector = SECTORS.find((s) => s.id === sectorId);
+      if (!sector) return;
+      const center = getSectorWorldPosition(sector);
+
+      // Slots
+      const slots: Record<string, (typeof conns)[0] | null> = {
+        N: null,
+        S: null,
+        E: null,
+        W: null,
+      };
+
+      const getNaturalDir = (dx: number, dy: number) => {
+        if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'E' : 'W';
+        return dy > 0 ? 'S' : 'N';
+      };
+
+      // Helper to find next free slot
+      const assignSlot = (conn: (typeof conns)[0]) => {
+        const natural = getNaturalDir(conn.dx, conn.dy);
+
+        // Try natural first
+        if (!slots[natural]) {
+          slots[natural] = conn;
+          return;
+        }
+
+        // Try neighbors (Standard Clockwise: N -> E -> S -> W)
+        // Map dirs to indices: E=0, S=1, W=2, N=3
+        const dirMap: Record<string, number> = { E: 0, S: 1, W: 2, N: 3 };
+        const revMap = ['E', 'S', 'W', 'N'];
+
+        const currentIdx = dirMap[natural];
+
+        // Check offsets: 1 (CW 90), 3 (CCW 90), 2 (Opposite)
+        const offsets = [1, 3, 2];
+
+        for (const off of offsets) {
+          const tryIdx = (currentIdx + off) % 4;
+          const tryDir = revMap[tryIdx];
+          if (!slots[tryDir]) {
+            slots[tryDir] = conn;
+            return;
+          }
+        }
+        console.warn(`Sector ${sector.name} overloaded! >4 gates?`);
+      };
+
+      // Assign
+      conns.forEach((c) => assignSlot(c));
+
+      // Create
+      Object.entries(slots).forEach(([dir, req]) => {
+        if (!req) return;
+
+        let gx = center.x;
+        let gy = center.y;
+
+        if (dir === 'E') gx += SECTOR_SIZE;
+        if (dir === 'W') gx -= SECTOR_SIZE;
+        if (dir === 'S') gy += SECTOR_SIZE;
+        if (dir === 'N') gy -= SECTOR_SIZE;
+
+        this.createGate(gx, gy, sectorId, req.targetSectorId, req.targetGateId, req.gateId);
+      });
     });
   }
 

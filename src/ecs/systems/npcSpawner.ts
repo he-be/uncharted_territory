@@ -1,25 +1,28 @@
 import { world } from '../world';
 import { v4 as uuidv4 } from 'uuid';
-import { SECTORS } from '../../data/universe';
+import { SECTORS, getSectorWorldPosition } from '../../data/universe';
 
-const SPAWN_INTERVAL = 10000; // 10 seconds
+const SPAWN_INTERVAL = 1000; // 10 seconds
 let lastSpawnTime = 0;
 
 export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
   const existingNpcs = world.with('aiState');
-  const maxNpcs = 25;
+  const maxNpcs = 250;
 
   if (existingNpcs.size < maxNpcs) {
     const now = scene.time.now;
     if (now - lastSpawnTime > SPAWN_INTERVAL) {
       lastSpawnTime = now;
 
-      // Maintain 5 traders
-      // Random edge spawn
+      // Random Sector
+      const startSector = SECTORS[Math.floor(Math.random() * SECTORS.length)];
+      const sectorPos = getSectorWorldPosition(startSector); // {x, y} scaled
+
+      // Random Position within Sector (Radius 5000)
       const angle = Math.random() * Math.PI * 2;
-      const radius = 2000;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
+      const radius = Math.random() * 5000;
+      const x = sectorPos.x + Math.cos(angle) * radius;
+      const y = sectorPos.y + Math.sin(angle) * radius;
 
       const sprite = scene.add.sprite(x, y, 'npc_trader');
       sprite.setScale(0.12);
@@ -38,9 +41,11 @@ export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
         wallet: 1000,
         totalProfit: 0,
         target: undefined,
-        sectorId: SECTORS[Math.floor(Math.random() * SECTORS.length)].id,
+        sectorId: startSector.id,
       });
-      console.log(`[NPC Spawner] Spawned new NPC. Total: ${existingNpcs.size + 1}`);
+      console.log(
+        `[NPC Spawner] Spawned new NPC in ${startSector.name}. Total: ${existingNpcs.size + 1}`
+      );
     }
   }
 };

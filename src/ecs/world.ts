@@ -59,6 +59,14 @@ export type Entity = {
 
   // Visuals
   textOverlay?: Phaser.GameObjects.Text;
+
+  // AutoPilot
+  autoPilot?: {
+    targetX?: number;
+    targetY?: number;
+    pathQueue?: string[]; // List of Sector IDs to visit
+    state: 'IDLE' | 'ALIGNING' | 'THRUSTING' | 'BRAKING' | 'CLEARING_GATE';
+  };
 };
 
 export const world = new World<Entity>();

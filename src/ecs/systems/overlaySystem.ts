@@ -3,14 +3,18 @@ import Phaser from 'phaser';
 import { ITEMS, type ItemId } from '../../data/items';
 
 export const overlaySystem = (scene: Phaser.Scene) => {
+  // Get Player Sector
+  const player = world.with('playerControl', 'sectorId').first;
+  const currentSector = player ? player.sectorId : null;
+
   // 1. NPC Profit Overlay
-  const npcEntities = world.with('transform', 'totalProfit');
+  const npcEntities = world.with('transform', 'totalProfit', 'sectorId');
   for (const entity of npcEntities) {
-    if (entity.station) continue; // Skip stations for this loop
+    if (entity.station) continue;
 
     // Create Text if missing
     if (!entity.textOverlay) {
-      entity.textOverlay = scene.add.text(entity.transform.x, entity.transform.y - 60, '$0', {
+      entity.textOverlay = scene.add.text(0, 0, '$0', {
         font: '28px monospace',
         color: '#ffffff',
         stroke: '#000000',
@@ -19,6 +23,14 @@ export const overlaySystem = (scene: Phaser.Scene) => {
       entity.textOverlay.setOrigin(0.5, 1);
       entity.textOverlay.setDepth(20);
     }
+
+    // Visibility Check
+    if (entity.sectorId !== currentSector) {
+      entity.textOverlay.setVisible(false);
+      continue;
+    }
+
+    entity.textOverlay.setVisible(true);
 
     // Update Position
     entity.textOverlay.setPosition(entity.transform.x, entity.transform.y - 50);
@@ -36,7 +48,7 @@ export const overlaySystem = (scene: Phaser.Scene) => {
   }
 
   // 2. Station Economy Overlay
-  const stationEntities = world.with('station', 'transform', 'wallet', 'inventory');
+  const stationEntities = world.with('station', 'transform', 'wallet', 'inventory', 'sectorId');
   for (const station of stationEntities) {
     if (!station.textOverlay) {
       station.textOverlay = scene.add.text(
@@ -55,6 +67,13 @@ export const overlaySystem = (scene: Phaser.Scene) => {
       station.textOverlay.setOrigin(0.5, 0);
       station.textOverlay.setDepth(20);
     }
+
+    // Visibility Check (Stations handle this slightly better since main render system manages sprite, but text is separate)
+    if (station.sectorId !== currentSector) {
+      station.textOverlay.setVisible(false);
+      continue;
+    }
+    station.textOverlay.setVisible(true);
 
     // Calculate Inventory Value
     let inventoryValue = 0;

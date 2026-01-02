@@ -1,7 +1,9 @@
 import { world, type Entity } from '../world';
 import { calculatePrice } from '../../utils/economyUtils';
 import { STATION_CONFIGS, type StationType } from '../../data/stations';
+
 import type { ItemId } from '../../data/items';
+import { findPath } from '../../utils/pathfinding';
 
 const ARRIVAL_RADIUS = 50;
 const JUMP_TIME_PENALTY = 5000; // Simulated time cost for jumping (effectively distance)
@@ -202,15 +204,21 @@ export const aiSystem = (_delta: number) => {
       let targetEntity = stationCache.get(targetId);
 
       // If target is in different sector, override target to GATE
+      // If target is in different sector, find path and head to NEXT Gate
       if (targetEntity && targetEntity.sectorId !== entity.sectorId) {
-        const sectorGates = gateCache.get(entity.sectorId || '');
-        const validGate = sectorGates?.find(
-          (g) => g.gate?.destinationSectorId === targetEntity!.sectorId
-        );
+        const path = findPath(entity.sectorId || '', targetEntity.sectorId || '');
 
-        if (validGate) {
-          targetId = validGate.id; // Override target ID for lookup
-          targetEntity = validGate;
+        if (path && path.length > 1) {
+          // path[0] is current, path[1] is next sector
+          const nextSector = path[1];
+
+          const sectorGates = gateCache.get(entity.sectorId || '');
+          const validGate = sectorGates?.find((g) => g.gate?.destinationSectorId === nextSector);
+
+          if (validGate) {
+            targetId = validGate.id; // Override target ID for lookup
+            targetEntity = validGate;
+          }
         }
       }
 
