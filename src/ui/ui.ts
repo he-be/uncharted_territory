@@ -13,6 +13,7 @@ export const ui = {
   closeTradeBtn: document.getElementById('close-trade')!,
   zoomInBtn: document.getElementById('zoom-in')!,
   zoomOutBtn: document.getElementById('zoom-out')!,
+  toggleMapBtn: document.getElementById('toggle-map')!,
 
   showDockingHint(show: boolean) {
     if (show) this.dockingHint.classList.remove('hidden');

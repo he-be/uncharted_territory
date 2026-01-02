@@ -26,6 +26,7 @@ export class MainScene extends Phaser.Scene {
   private keyE!: Phaser.Input.Keyboard.Key;
   private keyZ!: Phaser.Input.Keyboard.Key;
   private keyX!: Phaser.Input.Keyboard.Key;
+  private keyC!: Phaser.Input.Keyboard.Key;
   private debugText!: Phaser.GameObjects.Text;
   private playerEntity!: Entity;
 
@@ -62,8 +63,7 @@ export class MainScene extends Phaser.Scene {
     // 2. Input
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    this.keyZ = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
-    this.keyX = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+    this.startKeyListeners();
 
     // Zoom Input
     this.input.on(
@@ -82,6 +82,14 @@ export class MainScene extends Phaser.Scene {
 
     ui.zoomInBtn.addEventListener('click', () => this.adjustZoom(this.ZOOM_SPEED));
     ui.zoomOutBtn.addEventListener('click', () => this.adjustZoom(-this.ZOOM_SPEED));
+    ui.toggleMapBtn.addEventListener('click', () => {
+      if (this.scene.isActive('SectorMapScene')) {
+        this.scene.stop('SectorMapScene');
+        this.scene.resume(); // Ensure main scene is resumed if it was paused
+      } else {
+        this.scene.launch('SectorMapScene');
+      }
+    });
 
     // Trail Graphics
     this.trailGraphics = this.add.graphics();
@@ -215,6 +223,12 @@ export class MainScene extends Phaser.Scene {
     if (this.keyZ.isDown) this.adjustZoom(this.ZOOM_SPEED * 0.5);
     if (this.keyX.isDown) this.adjustZoom(-this.ZOOM_SPEED * 0.5);
 
+    if (Phaser.Input.Keyboard.JustDown(this.keyC)) {
+      if (!this.scene.isActive('SectorMapScene')) {
+        this.scene.launch('SectorMapScene');
+      }
+    }
+
     // If docked, we only skip player movement/control updates
     if (this.isDocked) {
       // Periodic UI Update (every 500ms)
@@ -313,6 +327,13 @@ export class MainScene extends Phaser.Scene {
         `Zoom: ${this.currentZoom.toFixed(2)}`,
       ]);
     }
+  }
+
+  startKeyListeners() {
+    this.keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+    this.keyZ = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+    this.keyX = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+    this.keyC = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C);
   }
 
   adjustZoom(delta: number) {
