@@ -11,6 +11,7 @@ import { renderSystem } from '../ecs/systems/renderSystem';
 import { gateSystem } from '../ecs/systems/gateSystem';
 import { autoPilotSystem } from '../ecs/systems/autoPilot';
 import { combatSystem } from '../ecs/systems/combatSystem';
+import { analyticsSystem } from '../ecs/systems/analyticsSystem';
 import { STATION_CONFIGS, type StationType } from '../data/stations';
 import { ITEMS, type ItemId } from '../data/items';
 import { calculatePrice } from '../utils/economyUtils';
@@ -30,6 +31,7 @@ export class MainScene extends Phaser.Scene {
   private keyZ!: Phaser.Input.Keyboard.Key;
   private keyX!: Phaser.Input.Keyboard.Key;
   private keyC!: Phaser.Input.Keyboard.Key;
+  private keyV!: Phaser.Input.Keyboard.Key;
   private debugText!: Phaser.GameObjects.Text;
   private playerEntity!: Entity;
 
@@ -98,6 +100,11 @@ export class MainScene extends Phaser.Scene {
       } else {
         this.scene.launch('SectorMapScene');
       }
+    });
+
+    ui.toggleEcoBtn.addEventListener('click', () => {
+      const isHidden = ui.ecoDashboard.classList.contains('hidden');
+      ui.toggleEco(isHidden); // Toggle
     });
 
     // Trail Graphics
@@ -217,6 +224,12 @@ export class MainScene extends Phaser.Scene {
         }
       }
 
+      // ECO Dashboard Toggle (V)
+      if (Phaser.Input.Keyboard.JustDown(this.keyV)) {
+        const isHidden = ui.ecoDashboard.classList.contains('hidden');
+        ui.toggleEco(isHidden);
+      }
+
       // If docked, we only skip player movement/control updates
       if (this.isDocked) {
         // Periodic UI Update (every 500ms)
@@ -281,6 +294,9 @@ export class MainScene extends Phaser.Scene {
       const ecoStart = performance.now();
       economySystem(time, delta);
       const ecoTime = performance.now() - ecoStart;
+
+      // Analytics
+      analyticsSystem(time);
 
       // UI/Overlay
       const ovStart = performance.now();
@@ -357,6 +373,7 @@ export class MainScene extends Phaser.Scene {
     this.keyZ = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
     this.keyX = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
     this.keyC = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C);
+    this.keyV = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.V);
   }
 
   adjustZoom(delta: number) {

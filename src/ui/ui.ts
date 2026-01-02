@@ -14,6 +14,14 @@ export const ui = {
   zoomInBtn: document.getElementById('zoom-in')!,
   zoomOutBtn: document.getElementById('zoom-out')!,
   toggleMapBtn: document.getElementById('toggle-map')!,
+  toggleEcoBtn: document.getElementById('toggle-eco')!,
+  ecoDashboard: document.getElementById('eco-dashboard')!,
+  ecoChart: document.getElementById('eco-chart') as HTMLCanvasElement,
+
+  toggleEco(show: boolean) {
+    if (show) this.ecoDashboard.classList.remove('hidden');
+    else this.ecoDashboard.classList.add('hidden');
+  },
 
   showDockingHint(show: boolean) {
     if (show) this.dockingHint.classList.remove('hidden');
