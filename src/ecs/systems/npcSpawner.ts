@@ -9,7 +9,7 @@ const CHECK_VARIANCE = 10000; // +/- 10s
 const PIRATE_WEALTH_THRESHOLD = 5000; // Wealth increase needed to spawn 1 pirate (Increased 5x)
 const MAX_PIRATES_PER_WAVE = 5;
 const BOUNTY_HUNTER_CHANCE = 0.5; // 50% chance per Pirate to spawn a Hunter
-const PIRATE_GRACE_PERIOD = 180000; // 3 minutes
+const PIRATE_GRACE_PERIOD = 120000; // 2 minutes
 
 interface SectorState {
   lastCheckTime: number;

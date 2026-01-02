@@ -91,8 +91,9 @@ export const MarketSystem = {
 
   getBestRoute: (): TradeRoute | null => {
     if (bestRoutes.length === 0) return null;
-    // Return a random one from top 10 to distribute traffic
-    const candidates = bestRoutes.slice(0, Math.min(10, bestRoutes.length));
+    // Return a random one from top 30 to distribute traffic more widely
+    // This prevents all traders from flocking to the single "best" route
+    const candidates = bestRoutes.slice(0, Math.min(30, bestRoutes.length));
     return candidates[Math.floor(Math.random() * candidates.length)];
   },
 };

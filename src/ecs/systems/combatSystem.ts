@@ -55,6 +55,17 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
       potentialTargets.push(e);
     }
 
+    // Pre-calculate attackers on target (for distribution)
+    const attackersOnTarget = new Map<string, number>();
+    for (const attacker of pirates) {
+      if (attacker.combatTarget) {
+        attackersOnTarget.set(
+          attacker.combatTarget,
+          (attackersOnTarget.get(attacker.combatTarget) || 0) + 1
+        );
+      }
+    }
+
     // Iterate all "Aggressors" (Pirates and Bounty Hunters)
     for (const attacker of pirates) {
       if (attacker.faction === 'TRADER') continue; // Traders are passive
@@ -73,17 +84,23 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
           if (target.id === attacker.id) continue;
           if (target.sectorId !== attacker.sectorId) continue;
           if (!target.transform) continue;
-          if (target.combatEncounter) continue; // Don't interrupt
 
-          // Faction Check
+          // Faction Check & Validity
           let isValidTarget = false;
+
           if (attacker.faction === 'PIRATE') {
             // Pirates attack Traders (Loot) and Bounty Hunters (Threat)
+            // Rule: Pirates generally don't interrupt existing fights to avoid KS/Conflict unless desperate?
+            // For now, Pirates stick to 1v1 or open targets.
+            if (target.combatEncounter) continue;
+
             if (target.faction === 'TRADER' || target.faction === 'BOUNTY_HUNTER')
               isValidTarget = true;
           } else if (attacker.faction === 'BOUNTY_HUNTER') {
             // Bounty Hunters attack Pirates
             if (target.faction === 'PIRATE') isValidTarget = true;
+
+            // ALLOW BH to join existing battles! (No combatEncounter check here)
           }
 
           if (!isValidTarget) continue;
@@ -96,15 +113,29 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
           );
 
           // Scoring
-          // Pirates love money, but also close targets
-          // BH just want to kill pirates
           let score = 0;
           if (attacker.faction === 'PIRATE') {
             const profitScore = Math.max(0, target.totalProfit || 0) + 100;
             score = profitScore / (dist + 100);
           } else {
-            // Bounty Hunter: Proximity is king
+            // Bounty Hunter AI:
+            // 1. Proximity (Base)
             score = 10000 / (dist + 10);
+
+            // 2. Priority: Active Threat (Target is fighting someone)
+            if (target.combatEncounter) {
+              score += 5000;
+
+              // If Target is attacking a TRADER? We need to know who they are fighting.
+              // We can check the encounter participants. Not easy directly from here without lookup.
+              // But we know 'target.combatTarget' is their victim? Not necessarily, could be attacker.
+              // Let's assume ANY combat is worth stopping.
+            }
+
+            // 3. Distribution: Avoid Swarming (Diminishing returns)
+            // If 5 hunters are already on this pirate, go elsewhere.
+            const currentAttackers = attackersOnTarget.get(target.id) || 0;
+            score -= currentAttackers * 2000; // Penalty per existing attacker
           }
 
           if (score > bestScore) {
@@ -132,7 +163,7 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
         !target ||
         !target.transform ||
         target.sectorId !== attacker.sectorId ||
-        target.combatEncounter
+        (target.combatEncounter && attacker.faction !== 'BOUNTY_HUNTER') // Allow BH to engage busy targets
       ) {
         // Target invalid or taken
         attacker.combatTarget = undefined;
@@ -174,6 +205,11 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
         const centerX = (attacker.transform.x + target.transform.x) / 2;
         const centerY = (attacker.transform.y + target.transform.y) / 2;
 
+        // Only create zone if target is free (avoids visual clutter of multiple zones on one guy)
+        // OR create it anyway? Let's create it for now to track "My Fight".
+        // Actually, if we want to share the zone, we probably need lookup.
+        // Simplest: Create a new zone for THIS pair.
+
         // Create Zone Entity
         world.add({
           id: encounterId,
@@ -181,17 +217,21 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
           sectorId: attacker.sectorId,
           encounterZone: {
             radius: 200,
-            center: { x: centerX, y: centerY }, // Stored for convenience, strictly redundant with transform
+            center: { x: centerX, y: centerY },
             participants: [attacker.id, target.id],
           },
         });
 
-        // Critical: Set AI State to COMBAT to stop aiSystem from moving them
+        // Critical: Set AI State to COMBAT
         attacker.aiState = 'COMBAT';
-        if (target.aiState) target.aiState = 'COMBAT';
+
+        // Only lock target if they aren't already fighting
+        if (!target.combatEncounter) {
+          target.aiState = 'COMBAT';
+          target.combatEncounter = { encounterId: encounterId, role: 'DEFENDER' };
+        }
 
         attacker.combatEncounter = { encounterId: encounterId, role: 'ATTACKER' };
-        target.combatEncounter = { encounterId: encounterId, role: 'DEFENDER' };
       }
     }
 
@@ -200,11 +240,16 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
       const target = entityMap.get(attacker.combatTarget);
 
       // Check validity
-      if (
+      // Check validity (Asymmetric)
+      const isValidEncounter =
         target &&
-        target.combatEncounter &&
-        target.combatEncounter.encounterId === attacker.combatEncounter.encounterId
-      ) {
+        // Case A: Mutual Lock (1v1)
+        ((target.combatEncounter &&
+          target.combatEncounter.encounterId === attacker.combatEncounter.encounterId) ||
+          // Case B: I am a Joiner (Target is fighting someone else, but still valid for me)
+          (target.combatEncounter && attacker.faction === 'BOUNTY_HUNTER'));
+
+      if (isValidEncounter) {
         // RE-ENFORCE LOCK EVERY FRAME (In case physics/other systems nudged them)
         if (attacker.velocity) {
           attacker.velocity.vx = 0;
