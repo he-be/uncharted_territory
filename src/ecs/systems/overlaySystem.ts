@@ -16,6 +16,19 @@ export const overlaySystem = (scene: Phaser.Scene) => {
   const player = world.with('playerControl', 'sectorId').first;
   const currentSector = player ? player.sectorId : null;
 
+  // Cleanup Hook (Ensure only added once)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (!(scene as any).__overlayCleanupInitialized) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (scene as any).__overlayCleanupInitialized = true;
+    world.onEntityRemoved.subscribe((e) => {
+      if (e.textOverlay) {
+        e.textOverlay.destroy();
+        e.textOverlay = undefined; // Clear ref
+      }
+    });
+  }
+
   // Camera Bounds
   const cam = scene.cameras.main;
   const worldView = cam.worldView;

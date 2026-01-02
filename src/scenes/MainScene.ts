@@ -35,7 +35,7 @@ export class MainScene extends Phaser.Scene {
   private keyX!: Phaser.Input.Keyboard.Key;
   private keyC!: Phaser.Input.Keyboard.Key;
   private keyV!: Phaser.Input.Keyboard.Key;
-  private debugText!: Phaser.GameObjects.Text;
+
   private playerEntity!: Entity;
 
   // Trail
@@ -146,11 +146,6 @@ export class MainScene extends Phaser.Scene {
     this.cameras.main.setZoom(this.currentZoom);
     this.cameras.main.setBounds(-500000, -500000, 3000000, 3000000); // Expanded for Sector 12 (1.6M)
 
-    // Debug HUD
-    this.debugText = this.add.text(10, 10, '', { font: '16px monospace', color: '#00ff00' });
-    this.debugText.setScrollFactor(0);
-    this.debugText.setDepth(100);
-
     // Initial Sector Set (already done above, ensuring consistency)
     if (!this.playerEntity.sectorId) {
       this.playerEntity.sectorId = 'sector-1';
@@ -160,7 +155,7 @@ export class MainScene extends Phaser.Scene {
   // MainScene.ts update method wrapper
   update(time: number, delta: number) {
     try {
-      const frameStart = performance.now();
+      // const frameStart = performance.now();
 
       if (this.keyZ.isDown) this.adjustZoom(this.ZOOM_SPEED * 0.5);
       if (this.keyX.isDown) this.adjustZoom(-this.ZOOM_SPEED * 0.5);
@@ -258,24 +253,7 @@ export class MainScene extends Phaser.Scene {
       this.systemManager.run('Gate', gateSystem, this.playerEntity);
       this.systemManager.run('Render', renderSystem, this.playerEntity);
 
-      const totalFrameTime = performance.now() - frameStart;
-
-      if (this.playerEntity.transform && this.playerEntity.velocity) {
-        const { x, y } = this.playerEntity.transform;
-        const { vx, vy } = this.playerEntity.velocity;
-        this.debugText.setText([
-          `FPS: ${this.game.loop.actualFps.toFixed(1)}`,
-          `Frame: ${totalFrameTime.toFixed(2)}ms`,
-          `NPC: ${this.systemManager.getMetric('NPC').toFixed(2)}ms`,
-          `AI: ${this.systemManager.getMetric('AI').toFixed(2)}ms`,
-          `Eco: ${this.systemManager.getMetric('Economy').toFixed(2)}ms`,
-          `Combat: ${this.systemManager.getMetric('Combat').toFixed(2)}ms`,
-          ``,
-          `Pos: (${x.toFixed(0)}, ${y.toFixed(0)})`,
-          `Vel: (${vx.toFixed(0)}, ${vy.toFixed(0)})`,
-          `Zoom: ${this.currentZoom.toFixed(2)}`,
-        ]);
-      }
+      // const totalFrameTime = performance.now() - frameStart;
     } catch (err) {
       console.error('MainScene Update Error:', err);
     }
