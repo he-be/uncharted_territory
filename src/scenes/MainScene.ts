@@ -12,12 +12,15 @@ import { gateSystem } from '../ecs/systems/gateSystem';
 import { autoPilotSystem } from '../ecs/systems/autoPilot';
 import { combatSystem } from '../ecs/systems/combatSystem';
 import { analyticsSystem } from '../ecs/systems/analyticsSystem';
-import { STATION_CONFIGS, type StationType } from '../data/stations';
+import { MarketSystem } from '../ecs/systems/MarketSystem';
+
 import { ITEMS, type ItemId } from '../data/items';
 import { calculatePrice } from '../utils/economyUtils';
 import { ui } from '../ui/ui';
 import { v4 as uuidv4 } from 'uuid';
-import { SECTORS, CONNECTIONS, getSectorWorldPosition } from '../data/universe';
+import { SECTORS } from '../data/universe';
+import { UniverseManager } from '../core/UniverseManager';
+import { SystemManager } from '../core/SystemManager';
 
 type TrailPoint = {
   x: number;
@@ -39,6 +42,8 @@ export class MainScene extends Phaser.Scene {
   private trailGraphics!: Phaser.GameObjects.Graphics;
   private trailHistory: TrailPoint[] = [];
   private readonly TRAIL_DURATION = 20000;
+
+  private systemManager = new SystemManager();
 
   private isDocked = false;
 
@@ -84,8 +89,7 @@ export class MainScene extends Phaser.Scene {
         _pointer: Phaser.Input.Pointer,
         _gameObjects: unknown[],
         _deltaX: number,
-        deltaY: number,
-        _deltaZ: number
+        deltaY: number
       ) => {
         if (deltaY > 0) this.adjustZoom(-this.ZOOM_SPEED);
         else if (deltaY < 0) this.adjustZoom(this.ZOOM_SPEED);
@@ -134,7 +138,8 @@ export class MainScene extends Phaser.Scene {
     world.add(this.playerEntity);
 
     // 4. Universe Generation
-    this.generateUniverse();
+    const universeManager = new UniverseManager(this);
+    universeManager.generateUniverse();
 
     // Camera Init
     this.cameras.main.startFollow(playerSprite);
@@ -150,65 +155,6 @@ export class MainScene extends Phaser.Scene {
     if (!this.playerEntity.sectorId) {
       this.playerEntity.sectorId = 'sector-1';
     }
-  }
-
-  createStation(
-    key: string,
-    x: number,
-    y: number,
-    name: string,
-    type: StationType,
-    sectorId: string
-  ) {
-    const sprite = this.add.sprite(x, y, key);
-    sprite.setScale(0.25);
-    sprite.setDepth(1);
-
-    const config = STATION_CONFIGS[type];
-
-    world.add({
-      id: uuidv4(),
-      transform: { x, y, rotation: 0 },
-      velocity: { vx: 0, vy: 0 },
-      sprite: sprite,
-      station: true,
-      interactionRadius: 200,
-      name: name,
-      stationType: type,
-      inventory: { ...config.initInventory },
-      productionConfig: config.production,
-      wallet: 10000,
-      totalProfit: 0,
-      sectorId: sectorId,
-    });
-  }
-
-  createGate(
-    x: number,
-    y: number,
-    sectorId: string,
-    targetSectorId: string,
-    targetGateId: string,
-    myId: string
-  ) {
-    // Re-use station sprite but tinted blue for now, or use shape
-    // Gate Sprite
-    const sprite = this.add.sprite(x, y, 'gate');
-    sprite.setScale(0.2); // 1/4 of previous 0.8
-    sprite.setDepth(1);
-
-    world.add({
-      id: myId,
-      transform: { x, y, rotation: 0 },
-      sprite: sprite,
-      interactionRadius: 100, // Trigger radius
-      name: `Gate to ${targetSectorId}`,
-      sectorId: sectorId,
-      gate: {
-        destinationSectorId: targetSectorId,
-        destinationGateId: targetGateId,
-      },
-    });
   }
 
   // MainScene.ts update method wrapper
@@ -231,34 +177,27 @@ export class MainScene extends Phaser.Scene {
         ui.toggleEco(isHidden);
       }
 
-      // If docked, we only skip player movement/control updates
+      // 3. Player Control
       if (this.isDocked) {
-        // Periodic UI Update (every 500ms)
+        // Periodic UI Update
         if (
           time - this.lastUiUpdate > 500 &&
           this.currentStation &&
           this.currentStation.inventory
         ) {
           this.lastUiUpdate = time;
-          // Don't re-set visible=true to avoid flickering if it resets scroll etc, checking if logic handles it.
-          // ui.showTradeMenu updates content.
           const tradeData = this.getTradeData(this.currentStation);
           ui.showTradeMenu(true, undefined, tradeData);
         }
-
-        // Check for undock key
-        if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
-          this.undock();
-        }
+        if (Phaser.Input.Keyboard.JustDown(this.keyE)) this.undock();
       } else {
-        // Only control player and move entities if NOT docked
         playerControlSystem(this.cursors);
       }
 
-      // Always run these (unless paused globally)
-      movementSystem(delta);
+      // System Execution via Manager
+      this.systemManager.run('Movement', movementSystem, delta);
 
-      // AutoPilot Click
+      // AutoPilot Click (keep inline or move to system?) Keep inline for now
       this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
         // Ignore clicks on UI (if feasible, otherwise just check coordinates/depth)
         // Convert screen to world
@@ -272,49 +211,24 @@ export class MainScene extends Phaser.Scene {
           console.log(
             `[AutoPilot] Set target to ${worldPoint.x.toFixed(0)}, ${worldPoint.y.toFixed(0)}`
           );
-
-          // Check if clicked an entity? (e.g. gate)
-          // Ideally we raycast, but simple proximity for now:
-          // const entities = world.with('transform', 'interactionRadius'); // Broad phase
-          // (omitted for brevity, simple coord move is enough for now)
         }
       });
+      // NOTE: Re-adding click handler logic here if it was lost in replacement,
+      // but actually I should keep the existing click handler if possible.
+      // The diff is large. I will preserve the click handler logic by copying it or using a smaller chunk.
 
-      // NPC Systems
-      const npcStart = performance.now();
-      npcSpawnerSystem(this, delta);
-      const npcTime = performance.now() - npcStart;
+      this.systemManager.run('NPC', npcSpawnerSystem, this, delta);
+      this.systemManager.run('Combat', combatSystem, this, delta);
+      this.systemManager.run('AutoPilot', autoPilotSystem, this.playerEntity, delta);
+      this.systemManager.run('AI', aiSystem, delta);
+      this.systemManager.run('Economy', economySystem, time, delta);
+      this.systemManager.run('Market', MarketSystem.update, time);
+      this.systemManager.run('Analytics', analyticsSystem, time);
+      this.systemManager.run('Overlay', overlaySystem, this);
 
-      const combatStart = performance.now();
-      combatSystem(this, delta);
-      const combatTime = performance.now() - combatStart;
-
-      // AutoPilot
-      // const apStart = performance.now();
-      autoPilotSystem(this.playerEntity, delta);
-      // const apTime = performance.now() - apStart;
-
-      const aiStart = performance.now();
-      aiSystem(delta);
-      const aiTime = performance.now() - aiStart;
-
-      // Economy System
-      const ecoStart = performance.now();
-      economySystem(time, delta);
-      const ecoTime = performance.now() - ecoStart;
-
-      // Analytics
-      // const anStart = performance.now();
-      analyticsSystem(time);
-      // const anTime = performance.now() - anStart;
-
-      // UI/Overlay
-      const ovStart = performance.now();
-      overlaySystem(this);
-      const ovTime = performance.now() - ovStart;
-
-      // Update Trail
+      // Trail & Interaction
       if (this.playerEntity.transform) {
+        // Trail logic (condensed)
         const lastPoint = this.trailHistory[this.trailHistory.length - 1];
         if (!lastPoint || time - lastPoint.time > 200) {
           this.trailHistory.push({
@@ -324,10 +238,8 @@ export class MainScene extends Phaser.Scene {
           });
         }
         this.trailHistory = this.trailHistory.filter((p) => time - p.time < this.TRAIL_DURATION);
-
         this.trailGraphics.clear();
         this.trailGraphics.lineStyle(4, 0xffff00, 1.0);
-
         if (this.trailHistory.length > 1) {
           this.trailGraphics.beginPath();
           this.trailGraphics.moveTo(this.trailHistory[0].x, this.trailHistory[0].y);
@@ -338,24 +250,15 @@ export class MainScene extends Phaser.Scene {
         }
       }
 
-      // Interaction Check
       const dockableStation = interactionSystem(this.playerEntity);
-
       if (dockableStation && Phaser.Input.Keyboard.JustDown(this.keyE)) {
         this.dock(dockableStation);
       }
 
-      // Phase 4: Gate & Render Systems
-      gateSystem(this.playerEntity);
-      // mapSystem moved to UIScene
-      renderSystem(this.playerEntity);
+      this.systemManager.run('Gate', gateSystem, this.playerEntity);
+      this.systemManager.run('Render', renderSystem, this.playerEntity);
 
       const totalFrameTime = performance.now() - frameStart;
-      if (totalFrameTime > 33) {
-        console.warn(
-          `Long Frame: ${totalFrameTime.toFixed(2)}ms | NPC: ${npcTime.toFixed(2)} | Cbt: ${combatTime.toFixed(2)} | AI: ${aiTime.toFixed(2)} | Eco: ${ecoTime.toFixed(2)} | Ov: ${ovTime.toFixed(2)}`
-        );
-      }
 
       if (this.playerEntity.transform && this.playerEntity.velocity) {
         const { x, y } = this.playerEntity.transform;
@@ -363,9 +266,10 @@ export class MainScene extends Phaser.Scene {
         this.debugText.setText([
           `FPS: ${this.game.loop.actualFps.toFixed(1)}`,
           `Frame: ${totalFrameTime.toFixed(2)}ms`,
-          `AI: ${aiTime.toFixed(2)}ms`,
-          `Eco: ${ecoTime.toFixed(2)}ms`,
-          `Ov: ${ovTime.toFixed(2)}ms`,
+          `NPC: ${this.systemManager.getMetric('NPC').toFixed(2)}ms`,
+          `AI: ${this.systemManager.getMetric('AI').toFixed(2)}ms`,
+          `Eco: ${this.systemManager.getMetric('Economy').toFixed(2)}ms`,
+          `Combat: ${this.systemManager.getMetric('Combat').toFixed(2)}ms`,
           ``,
           `Pos: (${x.toFixed(0)}, ${y.toFixed(0)})`,
           `Vel: (${vx.toFixed(0)}, ${vy.toFixed(0)})`,
@@ -414,196 +318,6 @@ export class MainScene extends Phaser.Scene {
     this.isDocked = false;
     this.currentStation = null;
     ui.showTradeMenu(false);
-  }
-
-  generateUniverse() {
-    // 1. Generate Stations per Sector
-    SECTORS.forEach((sector) => {
-      const pos = getSectorWorldPosition(sector);
-      const sectorCX = pos.x;
-      const sectorCY = pos.y;
-
-      // Define mix based on sector type
-      let stationMix: StationType[] = [];
-
-      switch (sector.type) {
-        case 'core':
-          // Core: Heavy Trade, some Industry
-          stationMix = ['trading', 'trading', 'factory'];
-          break;
-        case 'industrial':
-          // Industrial: Factories
-          stationMix = ['factory', 'factory', 'mining'];
-          break;
-        case 'mining':
-          // Mining: Mining
-          stationMix = ['mining', 'mining', 'mining'];
-          break;
-        case 'frontier':
-          // Frontier: Sparse, mixed
-          stationMix = ['mining', 'trading'];
-          break;
-
-        default:
-          stationMix = ['trading'];
-      }
-
-      stationMix.forEach((type, index) => {
-        // Spread stations out but keep within sector bounds (inner ring compared to gates)
-        const radius = 2000;
-        const angle = (Math.PI * 2 * index) / stationMix.length; // Even distribution
-
-        const x = sectorCX + Math.cos(angle) * radius + (Math.random() - 0.5) * 500;
-        const y = sectorCY + Math.sin(angle) * radius + (Math.random() - 0.5) * 500;
-
-        this.createStation(
-          this.getStationSpriteKey(type),
-          x,
-          y,
-          `${sector.name} ${type.charAt(0).toUpperCase() + type.slice(1)} ${index + 1}`,
-          type,
-          sector.id
-        );
-      });
-    });
-
-    // 2. Generate Gates (Distribution Strategy: One per Direction)
-    // Pass 1: Collect all connections per sector
-    const sectorConnections = new Map<
-      string,
-      Array<{
-        targetSectorId: string;
-        gateId: string;
-        targetGateId: string;
-        dx: number;
-        dy: number;
-      }>
-    >();
-
-    CONNECTIONS.forEach((conn) => {
-      const sA = SECTORS.find((s) => s.id === conn.from);
-      const sB = SECTORS.find((s) => s.id === conn.to);
-      if (!sA || !sB) return;
-
-      const gidA = `gate-${conn.from}-${conn.to}`;
-      const gidB = `gate-${conn.to}-${conn.from}`;
-
-      if (!sectorConnections.has(conn.from)) sectorConnections.set(conn.from, []);
-      if (!sectorConnections.has(conn.to)) sectorConnections.set(conn.to, []);
-
-      sectorConnections.get(conn.from)!.push({
-        targetSectorId: conn.to,
-        gateId: gidA,
-        targetGateId: gidB,
-        dx: sB.x - sA.x,
-        dy: sB.y - sA.y,
-      });
-
-      sectorConnections.get(conn.to)!.push({
-        targetSectorId: conn.from,
-        gateId: gidB,
-        targetGateId: gidA,
-        dx: sA.x - sB.x,
-        dy: sA.y - sB.y,
-      });
-    });
-
-    // Pass 2: Assign Slots
-    const SECTOR_SIZE = 5000;
-
-    sectorConnections.forEach((conns, sectorId) => {
-      const sector = SECTORS.find((s) => s.id === sectorId);
-      if (!sector) return;
-      const center = getSectorWorldPosition(sector);
-
-      // Slots
-      const slots: Record<string, (typeof conns)[0] | null> = {
-        N: null,
-        S: null,
-        E: null,
-        W: null,
-      };
-
-      const getNaturalDir = (dx: number, dy: number) => {
-        if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'E' : 'W';
-        return dy > 0 ? 'S' : 'N';
-      };
-
-      // Helper to find next free slot
-      const assignSlot = (conn: (typeof conns)[0]) => {
-        const natural = getNaturalDir(conn.dx, conn.dy);
-
-        // Try natural first
-        if (!slots[natural]) {
-          slots[natural] = conn;
-          return;
-        }
-
-        // Try neighbors (Standard Clockwise: N -> E -> S -> W)
-        // Map dirs to indices: E=0, S=1, W=2, N=3
-        const dirMap: Record<string, number> = { E: 0, S: 1, W: 2, N: 3 };
-        const revMap = ['E', 'S', 'W', 'N'];
-
-        const currentIdx = dirMap[natural];
-
-        // Check offsets: 1 (CW 90), 3 (CCW 90), 2 (Opposite)
-        const offsets = [1, 3, 2];
-
-        for (const off of offsets) {
-          const tryIdx = (currentIdx + off) % 4;
-          const tryDir = revMap[tryIdx];
-          if (!slots[tryDir]) {
-            slots[tryDir] = conn;
-            return;
-          }
-        }
-        console.warn(`Sector ${sector.name} overloaded! >4 gates?`);
-      };
-
-      // Assign
-      conns.forEach((c) => assignSlot(c));
-
-      // Create
-      Object.entries(slots).forEach(([dir, req]) => {
-        if (!req) return;
-
-        let gx = center.x;
-        let gy = center.y;
-
-        if (dir === 'E') gx += SECTOR_SIZE;
-        if (dir === 'W') gx -= SECTOR_SIZE;
-        if (dir === 'S') gy += SECTOR_SIZE;
-        if (dir === 'N') gy -= SECTOR_SIZE;
-
-        this.createGate(gx, gy, sectorId, req.targetSectorId, req.targetGateId, req.gateId);
-      });
-    });
-  }
-
-  getStationTypeForSector(sectorType: string): StationType {
-    switch (sectorType) {
-      case 'mining':
-        return 'mining';
-      case 'industrial':
-        return 'factory';
-      case 'core':
-        return Math.random() > 0.5 ? 'trading' : 'factory';
-      case 'pirate':
-        return Math.random() > 0.5 ? 'mining' : 'trading'; // Black markets?
-      default:
-        return 'trading';
-    }
-  }
-
-  getStationSpriteKey(type: StationType): string {
-    switch (type) {
-      case 'mining':
-        return 'station_mining';
-      case 'factory':
-        return 'station_factory';
-      default:
-        return 'station';
-    }
   }
 
   getTradeData(station: Entity) {

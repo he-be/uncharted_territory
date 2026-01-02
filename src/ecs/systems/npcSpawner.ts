@@ -17,9 +17,20 @@ interface SectorState {
   lastTotalWealth: number;
 }
 
+let traderCount = 0;
+let initialized = false;
+
+// Optimization: Cached counts
+const updateCounts = () => {
+  traderCount = 0;
+  for (const e of world.entities) {
+    if (e.faction === 'TRADER') traderCount++;
+  }
+};
+
 const sectorStates = new Map<string, SectorState>();
 
-export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
+export const npcSpawnerSystem = (scene: Phaser.Scene) => {
   const now = scene.time.now;
   const existingNpcs = world.with('aiState');
   const maxNpcs = 300; // Increased limit
@@ -36,16 +47,23 @@ export const npcSpawnerSystem = (scene: Phaser.Scene, _delta: number) => {
     });
   }
 
+  // Initialize Spawner subscriptions
+  if (!initialized) {
+    updateCounts(); // Initial count
+    world.onEntityAdded.subscribe((e) => {
+      if (e.faction === 'TRADER') traderCount++;
+    });
+    world.onEntityRemoved.subscribe((e) => {
+      if (e.faction === 'TRADER') traderCount--;
+    });
+    initialized = true;
+  }
+
   // 1. Trader Spawning (Baseline Activity)
   // Simple random spawning to keep economy moving
   if (existingNpcs.size < maxNpcs) {
     if (Math.random() < TRADER_SPAWN_RATE) {
-      // Check SPECIFIC Trader Cap
-      let traderCount = 0;
-      for (const e of existingNpcs) {
-        if (e.faction === 'TRADER') traderCount++;
-      }
-
+      // Check SPECIFIC Trader Cap (Optimized)
       const MAX_TRADERS = 250;
       if (traderCount < MAX_TRADERS) {
         spawnTrader(scene);
