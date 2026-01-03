@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { world } from '../ecs/world';
 import { SECTORS, CONNECTIONS } from '../data/universe';
 import { findPath } from '../utils/pathfinding';
-import { sectorKillCounts } from '../ecs/systems/analyticsSystem';
+import { getSectorKills } from '../ecs/systems/analyticsSystem';
 
 export class SectorMapScene extends Phaser.Scene {
   private playerSectorId: string | null = null;
@@ -48,9 +48,16 @@ export class SectorMapScene extends Phaser.Scene {
     this.drawMap();
   }
 
-  update() {
+  update(time: number, delta: number) {
     if (Phaser.Input.Keyboard.JustDown(this.closeKey)) {
       this.closeMap();
+    }
+
+    // Refresh Map every 1 second to update danger levels
+    this.refreshTimer += delta;
+    if (this.refreshTimer > 1000) {
+      this.refreshTimer = 0;
+      this.drawMap();
     }
 
     // Check for player sector update
@@ -60,6 +67,8 @@ export class SectorMapScene extends Phaser.Scene {
       this.drawMap();
     }
   }
+
+  private refreshTimer = 0;
 
   private closeMap() {
     this.scene.stop();
@@ -101,7 +110,8 @@ export class SectorMapScene extends Phaser.Scene {
     // Draw Nodes
     for (const node of nodes) {
       const isPlayerHere = this.playerSectorId === node.id;
-      const kills = sectorKillCounts[node.id] || 0;
+      // Get kills in last 5 minutes (300,000 ms)
+      const kills = getSectorKills(node.id, 300000);
 
       // Determine Color based on Danger (Kills)
       // Safe: 0-5 (Blue/Green)
@@ -144,7 +154,7 @@ export class SectorMapScene extends Phaser.Scene {
 
       // Label
       const label = this.add
-        .text(node.x, node.y + radius + 10, `${node.label}\nSunk: ${kills}`, {
+        .text(node.x, node.y + radius + 10, `${node.label}\nSunk(5m): ${kills}`, {
           fontSize: '14px',
           color: '#ffffff',
           align: 'center',

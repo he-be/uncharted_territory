@@ -97,11 +97,36 @@ export const recordTradeAttempt = (itemId: ItemId, success: boolean, amount: num
 };
 
 // Kill Tracking
-export const sectorKillCounts: Record<string, number> = {};
+// Kill Tracking (Timestamps)
+const sectorKillTimestamps: Record<string, number[]> = {};
 
 export const recordKill = (sectorId: string) => {
-  sectorKillCounts[sectorId] = (sectorKillCounts[sectorId] || 0) + 1;
+  if (!sectorKillTimestamps[sectorId]) sectorKillTimestamps[sectorId] = [];
+  sectorKillTimestamps[sectorId].push(Date.now());
 };
+
+export const getSectorKills = (sectorId: string, windowMs: number = 300000): number => {
+  const now = Date.now();
+  const timestamps = sectorKillTimestamps[sectorId];
+  if (!timestamps) return 0;
+
+  // Clean up old (optimization: only clean on read? or separate loop?)
+  // For simplicity: filter on read.
+  const valid = timestamps.filter((t) => now - t <= windowMs);
+
+  // Update storage if we filtered a lot?
+  // Let's just return count for now.
+  return valid.length;
+};
+
+// Periodic Cleanup (to avoid infinite growth)
+setInterval(() => {
+  const now = Date.now();
+  const window = 300000; // 5 mins
+  for (const id in sectorKillTimestamps) {
+    sectorKillTimestamps[id] = sectorKillTimestamps[id].filter((t) => now - t <= window);
+  }
+}, 60000); // Every minute
 
 let lastRender = 0;
 
