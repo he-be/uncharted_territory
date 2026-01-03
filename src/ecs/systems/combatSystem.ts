@@ -1,7 +1,6 @@
 import { world, type Entity } from '../world';
 import Phaser from 'phaser';
 import { v4 as uuidv4 } from 'uuid';
-import { entityCooldowns } from '../cooldowns';
 import { recordKill } from './analyticsSystem';
 
 const COMBAT_RANGE = 150;
