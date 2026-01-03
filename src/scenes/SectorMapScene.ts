@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { world } from '../ecs/world';
 import { SECTORS, CONNECTIONS } from '../data/universe';
 import { findPath } from '../utils/pathfinding';
+import { sectorKillCounts } from '../ecs/systems/analyticsSystem';
 
 export class SectorMapScene extends Phaser.Scene {
   private playerSectorId: string | null = null;
@@ -100,8 +101,25 @@ export class SectorMapScene extends Phaser.Scene {
     // Draw Nodes
     for (const node of nodes) {
       const isPlayerHere = this.playerSectorId === node.id;
-      const color = isPlayerHere ? 0x00ff00 : 0x0088ff;
-      const radius = 40;
+      const kills = sectorKillCounts[node.id] || 0;
+
+      // Determine Color based on Danger (Kills)
+      // Safe: 0-5 (Blue/Green)
+      // Risky: 5-20 (Yellow/Orange)
+      // Dangerous: 20+ (Red)
+      let color = 0x0088ff; // Safe (Default Blue)
+      let radius = 40;
+
+      if (kills > 20) {
+        color = 0xff0000; // Dangerous (Red)
+        radius = 50; // Bigger to emphasize
+      } else if (kills > 5) {
+        color = 0xffaa00; // Risky (Orange)
+      }
+
+      if (isPlayerHere) {
+        color = 0x00ff00; // Player (Green Override)
+      }
 
       // Circle
       this.graphics.fillStyle(color, 1);
@@ -111,6 +129,7 @@ export class SectorMapScene extends Phaser.Scene {
       // Since Graphics can't easily accept input per-shape, we create a zone or check bounds on click?
       // Better: Create an interactive Zone or Shape overlay for input.
       const zone = this.add.circle(node.x, node.y, radius).setInteractive();
+      // ... same logic
       zone.on('pointerdown', () => {
         this.navigateToSector(node.id);
       });
@@ -125,7 +144,7 @@ export class SectorMapScene extends Phaser.Scene {
 
       // Label
       const label = this.add
-        .text(node.x, node.y + radius + 10, node.label, {
+        .text(node.x, node.y + radius + 10, `${node.label}\nSunk: ${kills}`, {
           fontSize: '14px',
           color: '#ffffff',
           align: 'center',

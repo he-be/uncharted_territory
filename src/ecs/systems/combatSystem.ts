@@ -1,6 +1,8 @@
 import { world, type Entity } from '../world';
 import Phaser from 'phaser';
 import { v4 as uuidv4 } from 'uuid';
+import { entityCooldowns } from '../cooldowns';
+import { recordKill } from './analyticsSystem';
 
 const COMBAT_RANGE = 150;
 const WEAPON_DAMAGE = 10; // Doubled from 5
@@ -281,16 +283,27 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
 
             // Check Death
             if (target.combatStats.hp <= 0) {
+              // Record Kill for Sector Danger Map
+              // Only count "hostile" kills or all? User asked for "number of sinkings" -> All seems fair.
+              // Assuming sectorId is accessible
+              if (target.sectorId) {
+                recordKill(target.sectorId);
+              }
+
+              // Drop Loot
+              if (target.cargo && target.transform) {
+                /* loot money */
+              }
               // LOOTING (Only Pirates loot money)
               if (attacker.faction === 'PIRATE') {
                 const loot = Math.max(0, target.totalProfit || 0);
                 if (!attacker.piracy) attacker.piracy = { revenue: 0 };
                 attacker.piracy.revenue += loot;
                 console.log(
-                  `[Combat] Pirate ${attacker.id} looted ${loot} from ${target.faction}!`
+                  `[Combat] Pirate ${attacker.id} looted ${loot} from ${target.faction} !`
                 );
               } else {
-                console.log(`[Combat] ${attacker.faction} destroyed ${target.faction}!`);
+                console.log(`[Combat] ${attacker.faction} destroyed ${target.faction} !`);
               }
 
               // Cleanup Encounter Zone
@@ -334,7 +347,7 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
                     if (danglingZone.textOverlay) danglingZone.textOverlay.destroy();
                     world.remove(danglingZone);
                     console.log(
-                      `[Combat] Cleaned up dangling encounter zone ${danglingEncounterId}`
+                      `[Combat] Cleaned up dangling encounter zone ${danglingEncounterId} `
                     );
                   }
                 }
