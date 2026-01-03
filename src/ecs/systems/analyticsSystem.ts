@@ -12,8 +12,9 @@ let lastUpdate = 0;
 const statHistory: {
   time: number;
   stationVal: number;
-  traderVal: number;
-  pirateVal: number;
+  traderCount: number;
+  pirateCount: number;
+  hunterCount: number;
 }[] = [];
 
 // Production History (Circular Buffer of 1s buckets)
@@ -120,8 +121,6 @@ export const analyticsSystem = (time: number) => {
     lastUpdate = time;
 
     let totalStationVal = 0;
-    let totalTraderVal = 0;
-    let totalPirateVal = 0;
 
     // Stations
     for (const station of world.with('station', 'wallet', 'inventory')) {
@@ -137,19 +136,26 @@ export const analyticsSystem = (time: number) => {
     }
 
     // Ships
-    for (const ship of world.with('faction', 'totalProfit', 'piracy')) {
+    let traderCount = 0;
+    let pirateCount = 0;
+    let hunterCount = 0;
+
+    for (const ship of world.with('faction')) {
       if (ship.faction === 'TRADER') {
-        totalTraderVal += ship.totalProfit || 0;
+        traderCount++;
       } else if (ship.faction === 'PIRATE') {
-        totalPirateVal += ship.piracy?.revenue || 0;
+        pirateCount++;
+      } else if (ship.faction === 'BOUNTY_HUNTER') {
+        hunterCount++;
       }
     }
 
     statHistory.push({
       time,
       stationVal: totalStationVal,
-      traderVal: totalTraderVal,
-      pirateVal: totalPirateVal,
+      traderCount,
+      pirateCount,
+      hunterCount,
     });
 
     if (statHistory.length > HISTORY_SIZE) {
@@ -259,7 +265,8 @@ const renderGraph = () => {
   const mapX = (i: number) => (i / (HISTORY_SIZE - 1)) * w;
 
   // Helper: MinMax
-  const getMinMax = (props: ('stationVal' | 'traderVal' | 'pirateVal')[]) => {
+  // Helper: MinMax
+  const getMinMax = (props: ('stationVal' | 'traderCount' | 'pirateCount' | 'hunterCount')[]) => {
     let min = Infinity;
     let max = -Infinity;
     for (const pt of statHistory) {
@@ -322,10 +329,13 @@ const renderGraph = () => {
   ctx.fillText(`${Math.floor(stRange.max).toLocaleString()}`, 5, padding);
   ctx.fillText(`${Math.floor(stRange.min).toLocaleString()}`, 5, halfH - 5);
 
-  // --- Subplot 2: Traders & Pirates (Bottom Half) ---
-  const shRange = getMinMax(['traderVal', 'pirateVal']);
-  const shMargin = (shRange.max - shRange.min) * 0.05;
-  shRange.min -= shMargin;
+  // --- Subplot 2: Global Fleet Counts (Bottom Half) ---
+  const shRange = getMinMax(['traderCount', 'pirateCount', 'hunterCount']);
+  // Ensure we see at least 0-10 or so
+  if (shRange.max < 10) shRange.max = 10;
+
+  const shMargin = (shRange.max - shRange.min) * 0.1;
+  shRange.min = 0; // Counts imply 0 base usually looks better
   shRange.max += shMargin;
 
   const mapYShip = (val: number) => {
@@ -339,7 +349,7 @@ const renderGraph = () => {
   started = false;
   for (let i = 0; i < statHistory.length; i++) {
     const x = mapX(i);
-    const y = mapYShip(statHistory[i].traderVal);
+    const y = mapYShip(statHistory[i].traderCount);
     if (!started) {
       ctx.moveTo(x, y);
       started = true;
@@ -355,7 +365,23 @@ const renderGraph = () => {
   started = false;
   for (let i = 0; i < statHistory.length; i++) {
     const x = mapX(i);
-    const y = mapYShip(statHistory[i].pirateVal);
+    const y = mapYShip(statHistory[i].pirateCount);
+    if (!started) {
+      ctx.moveTo(x, y);
+      started = true;
+    } else {
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+
+  // Draw Bounty Hunters (Orange)
+  ctx.strokeStyle = '#ffaa00';
+  ctx.beginPath();
+  started = false;
+  for (let i = 0; i < statHistory.length; i++) {
+    const x = mapX(i);
+    const y = mapYShip(statHistory[i].hunterCount);
     if (!started) {
       ctx.moveTo(x, y);
       started = true;
@@ -367,18 +393,16 @@ const renderGraph = () => {
 
   // Labels Bottom
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(`${Math.floor(shRange.max).toLocaleString()}`, 5, halfH + padding + 10);
-  ctx.fillText(`${Math.floor(shRange.min).toLocaleString()}`, 5, h - 5);
+  ctx.fillText(`Count Max: ${Math.floor(shRange.max)}`, 5, halfH + padding + 10);
+  ctx.fillText(`0`, 5, h - 5);
 
-  // Zero line if visible
-  if (shRange.min < 0 && shRange.max > 0) {
-    const y0 = mapYShip(0);
-    ctx.strokeStyle = '#666';
-    ctx.setLineDash([2, 4]);
-    ctx.beginPath();
-    ctx.moveTo(0, y0);
-    ctx.lineTo(w, y0);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // Legend
+  const lx = w - 100;
+  const ly = halfH + padding + 10;
+  ctx.fillStyle = '#00ffff';
+  ctx.fillText('Trader', lx, ly);
+  ctx.fillStyle = '#ff4444';
+  ctx.fillText('Pirate', lx, ly + 12);
+  ctx.fillStyle = '#ffaa00';
+  ctx.fillText('Hunter', lx, ly + 24);
 };
