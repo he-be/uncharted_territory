@@ -315,6 +315,28 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
               attacker.combatTarget = undefined;
               attacker.combatEncounter = undefined;
               attacker.aiState = 'PLANNING'; // Resume hunting
+
+              // --- VICTIM RELEASE LOGIC (Fix for "Frozen Combatant" Bug) ---
+              // If the dying entity (target) was attacking someone else, release that victim.
+              if (target.combatTarget) {
+                const victim = entityMap.get(target.combatTarget);
+                // Check if victim exists and is seemingly locked by US (the dying entity)
+                // Note: Victim's encounterId should match ours if we were the aggressor.
+                // But 'target' (dying) might have been 1v1ing 'victim'.
+                // If victim is in COMBAT, and their encounter matches ours (or target's), free them.
+                if (victim && victim.combatEncounter) {
+                  // Start simple: If they were our target, just free them.
+                  // Ideally check encounter ID match, but if we are dying, our encounter is ending.
+                  // The Zone cleanup (above) removes the zone, but the entity state persists.
+
+                  // Force release victim
+                  victim.combatEncounter = undefined;
+                  victim.combatTarget = undefined;
+                  victim.aiState = 'PLANNING';
+                  entityCooldowns.delete(victim.id);
+                  console.log(`[Combat] Released victim ${victim.id} from combat lock.`);
+                }
+              }
             }
           }
         }
