@@ -53,7 +53,6 @@ describe('Economy Simulation', () => {
     // Stations: 2 of each type to allow flow
     const stationTypes = Object.keys(STATION_CONFIGS) as Array<keyof typeof STATION_CONFIGS>;
     stationTypes.forEach((type) => {
-      // Removed unused index
       // Create 2 of each
       for (let i = 0; i < 2; i++) {
         world.add({
@@ -91,7 +90,7 @@ describe('Economy Simulation', () => {
         simState: 'IDLE', // IDLE, MOVING_TO_BUY, MOVING_TO_SELL
         simTargetId: '',
         simArrivalTime: 0,
-        simRoute: undefined, // null as any -> undefined
+        simRoute: undefined,
       };
       world.add(entity);
       traders.push(entity);
@@ -125,17 +124,13 @@ describe('Economy Simulation', () => {
             trader.simTargetId = route.buyStationId;
 
             // Calc distance
-            // Simplified: All trips take 10 seconds for this test to speed up cycles?
-            // Or use distance logic. Let's use simplified constant time for pure Econ Logic test.
-            // Actually, distance matters for valuation score.
-            // Let's assume average travel is 30s.
             trader.simArrivalTime = time + 30000;
           }
         } else if (trader.simState === 'MOVING_TO_BUY') {
-          if (time >= trader.simArrivalTime) {
+          if (time >= trader.simArrivalTime && trader.simRoute) {
             // Arrived
-            const station = world.entities.find((e) => e.id === trader.simRoute.buyStationId);
-            const itemId = trader.simRoute.itemId;
+            const station = world.entities.find((e) => e.id === trader.simRoute!.buyStationId);
+            const itemId = trader.simRoute!.itemId as ItemId;
 
             if (station && station.inventory) {
               const available = station.inventory[itemId] || 0;
@@ -143,12 +138,12 @@ describe('Economy Simulation', () => {
 
               if (amount > 0) {
                 // Success Buy
-                station.inventory[itemId] -= amount;
+                station.inventory[itemId] = (station.inventory[itemId] || 0) - amount;
                 trader.cargo[itemId] = (trader.cargo[itemId] || 0) + amount;
-                trader.wallet -= 100 * (amount / 10); // Dummy price scaling
+                trader.wallet -= 100 * (amount / 10);
 
                 trader.simState = 'MOVING_TO_SELL';
-                trader.simTargetId = trader.simRoute.sellStationId;
+                trader.simTargetId = trader.simRoute!.sellStationId;
                 trader.simArrivalTime = time + 30000;
               } else {
                 // Failure (Truly empty)
@@ -162,10 +157,10 @@ describe('Economy Simulation', () => {
             }
           }
         } else if (trader.simState === 'MOVING_TO_SELL') {
-          if (time >= trader.simArrivalTime) {
+          if (time >= trader.simArrivalTime && trader.simRoute) {
             // Arrived
-            const station = world.entities.find((e) => e.id === trader.simRoute.sellStationId);
-            const itemId = trader.simRoute.itemId as ItemId;
+            const station = world.entities.find((e) => e.id === trader.simRoute!.sellStationId);
+            const itemId = trader.simRoute!.itemId as ItemId;
             const amount = trader.cargo[itemId] || 0;
 
             if (station && station.inventory && amount > 0) {
@@ -174,7 +169,7 @@ describe('Economy Simulation', () => {
               trader.simState = 'IDLE';
               successes[itemId] = (successes[itemId] || 0) + 1;
             } else {
-              // Failed to sell? (Shouldn't happen in this simplified model)
+              // Failed to sell?
               trader.simState = 'IDLE';
             }
           }
@@ -187,18 +182,11 @@ describe('Economy Simulation', () => {
     console.table(successes);
     console.log('Failures:', failures);
 
-    // Assertions
-    // Baseline Expectation: Raw Materials move well. Processed Goods move poorly.
-    // If we implemented the fix (Higher Production Batches), we hope to see Tier 1 items moving.
-
     // Check key items
     const rawSum = (successes['ore'] || 0) + (successes['gas'] || 0);
     const tier1Sum = (successes['steel'] || 0) + (successes['fuel'] || 0);
 
     console.log(`Raw Trades: ${rawSum}`);
     console.log(`Tier 1 Trades: ${tier1Sum}`);
-
-    // In a broken economy, Tier 1 is near zero.
-    // expect(tier1Sum).toBeGreaterThan(0);
   });
 });
