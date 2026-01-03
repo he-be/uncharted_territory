@@ -318,17 +318,29 @@ export const combatSystem = (scene: Phaser.Scene, delta: number) => {
 
               // --- VICTIM RELEASE LOGIC (Fix for "Frozen Combatant" Bug) ---
               // If the dying entity (target) was attacking someone else, release that victim.
+              // AND destroy the zone associated with that "other" encounter.
               if (target.combatTarget) {
                 const victim = entityMap.get(target.combatTarget);
-                // Check if victim exists and is seemingly locked by US (the dying entity)
-                // Note: Victim's encounterId should match ours if we were the aggressor.
-                // But 'target' (dying) might have been 1v1ing 'victim'.
-                // If victim is in COMBAT, and their encounter matches ours (or target's), free them.
-                if (victim && victim.combatEncounter) {
-                  // Start simple: If they were our target, just free them.
-                  // Ideally check encounter ID match, but if we are dying, our encounter is ending.
-                  // The Zone cleanup (above) removes the zone, but the entity state persists.
 
+                // If the target had a DIFFERENT encounter ID where they were the attacker (likely), destroy it.
+                // Note: target.combatEncounter might be:
+                // 1. Same as attacker's (if 1v1) - Already cleaned up by main logic.
+                // 2. Different (if target was Attacker of Victim, and 'attacker' is Hunter/3rd party) - NEED TO CLEAN.
+
+                if (target.combatEncounter && target.combatEncounter.encounterId !== encounterId) {
+                  const danglingEncounterId = target.combatEncounter.encounterId;
+                  const danglingZone = entityMap.get(danglingEncounterId);
+                  if (danglingZone) {
+                    if (danglingZone.textOverlay) danglingZone.textOverlay.destroy();
+                    world.remove(danglingZone);
+                    console.log(
+                      `[Combat] Cleaned up dangling encounter zone ${danglingEncounterId}`
+                    );
+                  }
+                }
+
+                // Check if victim exists and is seemingly locked by US (the dying entity)
+                if (victim && victim.combatEncounter) {
                   // Force release victim
                   victim.combatEncounter = undefined;
                   victim.combatTarget = undefined;

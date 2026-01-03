@@ -6,9 +6,9 @@ import { ITEMS, type ItemId } from '../../data/items';
 // Configuration
 const BASE_CHECK_INTERVAL = 60000; // 60s
 const CHECK_VARIANCE = 10000; // +/- 10s
-const PIRATE_WEALTH_THRESHOLD = 5000; // Wealth increase needed to spawn 1 pirate (Increased 5x)
+const PIRATE_WEALTH_THRESHOLD = 15000; // Wealth increase needed to spawn 1 pirate (Increased 5x)
 const MAX_PIRATES_PER_WAVE = 5;
-const BOUNTY_HUNTER_CHANCE = 0.5; // 50% chance per Pirate to spawn a Hunter
+const BOUNTY_HUNTER_CHANCE = 0.4; // 50% chance per Pirate to spawn a Hunter
 const PIRATE_GRACE_PERIOD = 120000; // 2 minutes
 
 interface SectorState {
@@ -134,6 +134,13 @@ export const npcSpawnerSystem = (scene: Phaser.Scene) => {
       } */
 
       // B. Bounty Hunter Spawning (Counter-Piracy)
+      // Global Cap Check
+      let totalHunters = 0;
+      for (const e of world.with('faction')) {
+        if (e.faction === 'BOUNTY_HUNTER') totalHunters++;
+      }
+      const GLOBAL_HUNTER_CAP = SECTORS.length * 3; // Cap: 3 per sector avg
+
       let pirateCount = 0;
       for (const e of world.with('faction', 'sectorId')) {
         if (e.faction === 'PIRATE' && e.sectorId === sector.id) {
@@ -141,7 +148,7 @@ export const npcSpawnerSystem = (scene: Phaser.Scene) => {
         }
       }
 
-      if (pirateCount > 0) {
+      if (pirateCount > 0 && totalHunters < GLOBAL_HUNTER_CAP) {
         for (let i = 0; i < pirateCount; i++) {
           if (Math.random() < BOUNTY_HUNTER_CHANCE) {
             if (existingNpcs.size < maxNpcs) {
