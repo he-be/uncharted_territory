@@ -29,13 +29,13 @@ export class UniverseManager {
           stationMix = ['shipyard', 'trading', 'factory_electronics', 'factory_engine'];
           break;
         case 'industrial':
-          stationMix = ['factory_steel', 'factory_fuel', 'factory_sensors', 'mining_ore'];
+          stationMix = ['factory_steel', 'factory_fuel', 'factory_sensors']; // Removed mining_ore
           break;
         case 'mining':
           stationMix = ['mining_ore', 'mining_gas', 'mining_crystal'];
           break;
         case 'frontier':
-          stationMix = ['trading', 'mining_gas'];
+          stationMix = ['trading']; // Removed mining_gas
           break;
         default:
           stationMix = ['trading'];

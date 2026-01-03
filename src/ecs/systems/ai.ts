@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { calculatePrice } from '../../utils/economyUtils';
 import { findPath } from '../../utils/pathfinding';
 import { MarketSystem } from './MarketSystem';
+import { recordTradeAttempt } from './analyticsSystem';
 
 const ARRIVAL_RADIUS = 50;
 // const JUMP_TIME_PENALTY = 5000; // Unused
@@ -20,7 +21,10 @@ export const aiSystem = () => {
     'speedStats',
     'wallet',
     'totalProfit',
-    'sectorId'
+    'wallet',
+    'totalProfit',
+    'sectorId',
+    'cargoCapacity'
   );
   const stations = world.with('station', 'transform', 'stationType', 'inventory', 'sectorId');
   const gates = world.with('gate', 'transform', 'sectorId');
@@ -170,13 +174,14 @@ export const aiSystem = () => {
         if (route.state === 'MOVING_TO_BUY') {
           // ... (Trade Logic) ...
           const buyPrice = calculatePrice(targetEntity, route.itemId);
-          const amount = 10;
+          const maxCargo = entity.cargoCapacity || 10;
+          const available = targetEntity.inventory?.[route.itemId] || 0;
+
+          // Buy as much as possible up to limit
+          const amount = Math.min(available, maxCargo);
           const cost = buyPrice * amount;
 
-          if (
-            (entity.wallet || 0) >= cost &&
-            (targetEntity.inventory?.[route.itemId] || 0) >= amount
-          ) {
+          if ((entity.wallet || 0) >= cost && amount > 0) {
             entity.wallet! -= cost;
             targetEntity.inventory![route.itemId]! -= amount;
             if (targetEntity.wallet === undefined) targetEntity.wallet = 0;
@@ -192,7 +197,12 @@ export const aiSystem = () => {
             if (entity.sprite && 'setTexture' in entity.sprite) {
               (entity.sprite as Phaser.GameObjects.Sprite).setTexture('npc_trader_full');
             }
+            // Report Success
+            recordTradeAttempt(route.itemId, true, amount);
           } else {
+            // Report Failure (Arrived but empty or too expensive)
+            recordTradeAttempt(route.itemId, false, 0);
+
             entity.aiState = 'PLANNING';
             entity.tradeRoute = undefined;
           }

@@ -23,10 +23,76 @@ const productionBuckets: Record<ItemId, number>[] = new Array(PRODUCTION_HISTORY
 let currentBucketIndex = 0;
 let lastProductionTick = 0;
 
+// Benchmark / Trade Analytics
+interface TradeAttempt {
+  itemId: ItemId;
+  success: boolean;
+  amount: number;
+  timestamp: number;
+}
+let tradeHistory: TradeAttempt[] = [];
+let isBenchmarking = false;
+let benchmarkStartTime = 0;
+
+export const startBenchmark = (time: number) => {
+  isBenchmarking = true;
+  benchmarkStartTime = time;
+  tradeHistory = [];
+  console.log(`[Analytics] Benchmark STARTED at ${time}`);
+};
+
+export const stopBenchmark = (time: number) => {
+  isBenchmarking = false;
+  const duration = (time - benchmarkStartTime) / 1000;
+  console.log(`[Analytics] Benchmark STOPPED. Duration: ${duration.toFixed(1)}s`);
+  reportBenchmark();
+};
+
+const reportBenchmark = () => {
+  const stats: Record<
+    string,
+    { attempts: number; successes: number; failures: number; volume: number }
+  > = {};
+
+  for (const t of tradeHistory) {
+    if (!stats[t.itemId]) stats[t.itemId] = { attempts: 0, successes: 0, failures: 0, volume: 0 };
+    stats[t.itemId].attempts++;
+    if (t.success) {
+      stats[t.itemId].successes++;
+      stats[t.itemId].volume += t.amount;
+    } else {
+      stats[t.itemId].failures++;
+    }
+  }
+
+  console.table(stats);
+
+  // Also log specific failure rates
+  console.log('--- Trade Failure Analysis ---');
+  for (const [id, s] of Object.entries(stats)) {
+    const rate = ((s.failures / s.attempts) * 100).toFixed(1);
+    console.log(`${id}: ${rate}% Failure Rate (${s.failures}/${s.attempts})`);
+  }
+};
+
 // API to record production
 export const recordProduction = (itemId: ItemId, amount: number) => {
   const bucket = productionBuckets[currentBucketIndex];
   bucket[itemId] = (bucket[itemId] || 0) + amount;
+};
+
+// API to record trade
+export const recordTradeAttempt = (itemId: ItemId, success: boolean, amount: number) => {
+  if (!isBenchmarking) return;
+  // We strictly use Date.now() or pass time? Since this is called from AI, simplicity suggests strictly pushing.
+  // However, aiSystem doesn't have easy access to absolute time without passing it down.
+  // using Date.now() for relative ordering is fine.
+  tradeHistory.push({
+    itemId,
+    success,
+    amount,
+    timestamp: Date.now(),
+  });
 };
 
 let lastRender = 0;

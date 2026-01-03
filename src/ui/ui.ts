@@ -16,6 +16,7 @@ export const ui = {
   toggleMapBtn: document.getElementById('toggle-map')!,
   toggleEcoBtn: document.getElementById('toggle-eco')!,
   toggleStatsBtn: document.getElementById('toggle-stats')!,
+  toggleBenchBtn: document.getElementById('toggle-bench')!,
   ecoDashboard: document.getElementById('eco-dashboard')!,
   statsDashboard: document.getElementById('stats-dashboard')!,
   statsContent: document.getElementById('stats-content')!,

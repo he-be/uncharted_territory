@@ -66,7 +66,12 @@ export const MarketSystem = {
               }
 
               const cargoCapacity = 10;
-              const totalProfit = profitPerUnit * cargoCapacity;
+              // Real-Stock Valuation:
+              // Only count profit for what is ACTUALLY available to buy.
+              // This penalizes stations with low stock (Phantom Stock) and favors those with full batches.
+              const actualTradable = Math.min(stock, cargoCapacity);
+              const totalProfit = profitPerUnit * actualTradable;
+
               // Score: Profit per distance unit
               const score = totalProfit / (dist + 100);
 

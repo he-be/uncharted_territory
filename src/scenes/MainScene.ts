@@ -11,7 +11,7 @@ import { renderSystem } from '../ecs/systems/renderSystem';
 import { gateSystem } from '../ecs/systems/gateSystem';
 import { autoPilotSystem } from '../ecs/systems/autoPilot';
 import { combatSystem } from '../ecs/systems/combatSystem';
-import { analyticsSystem } from '../ecs/systems/analyticsSystem';
+import { analyticsSystem, startBenchmark, stopBenchmark } from '../ecs/systems/analyticsSystem';
 import { MarketSystem } from '../ecs/systems/MarketSystem';
 
 import { ITEMS, type ItemId } from '../data/items';
@@ -119,6 +119,24 @@ export class MainScene extends Phaser.Scene {
     ui.toggleStatsBtn.addEventListener('click', () => {
       const isHidden = ui.statsDashboard.classList.contains('hidden');
       ui.toggleStats(isHidden);
+      ui.toggleStats(isHidden);
+    });
+
+    // Benchmark Toggle (Red/Green button state?)
+    let isBenchmarking = false;
+    ui.toggleBenchBtn.addEventListener('click', () => {
+      isBenchmarking = !isBenchmarking;
+      if (isBenchmarking) {
+        ui.toggleBenchBtn.style.backgroundColor = 'red';
+        ui.toggleBenchBtn.style.color = 'white';
+        ui.toggleBenchBtn.innerText = 'STOP BENCH';
+        startBenchmark(this.time.now);
+      } else {
+        ui.toggleBenchBtn.style.backgroundColor = '';
+        ui.toggleBenchBtn.style.color = '#ff00ff';
+        ui.toggleBenchBtn.innerText = 'BENCH';
+        stopBenchmark(this.time.now);
+      }
     });
 
     // Trail Graphics

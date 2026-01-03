@@ -34,7 +34,7 @@ const sectorStates = new Map<string, SectorState>();
 export const npcSpawnerSystem = (scene: Phaser.Scene) => {
   const now = scene.time.now;
   const existingNpcs = world.with('aiState');
-  const maxNpcs = 300;
+  const maxNpcs = 200; // Optimal fleet size for Cargo 100
 
   // Initialize Sector States if needed
   if (sectorStates.size === 0) {
@@ -229,16 +229,16 @@ const spawnShip = (
   // Stats based on faction
   let hp = 100;
   let shields = 50;
-  let speed = 150; // +50%
+  let speed = 250; // +50%
 
   if (faction === 'PIRATE') {
     hp = 120;
     shields = 60;
-    speed = 180; // +50%
+    speed = 300; // +50%
   } else if (faction === 'BOUNTY_HUNTER') {
     hp = 200; // Stronger
     shields = 150;
-    speed = 210; // +50%
+    speed = 350; // +50%
   }
 
   world.add({
@@ -249,6 +249,7 @@ const spawnShip = (
     aiState: 'PLANNING',
     speedStats: { maxSpeed: speed, acceleration: 100 },
     cargo: {},
+    cargoCapacity: 100, // Updated to 100 (High Capacity Fleet)
     wallet: 1000,
     totalProfit: 0, // Track accumulation
     sectorId: sector.id,
