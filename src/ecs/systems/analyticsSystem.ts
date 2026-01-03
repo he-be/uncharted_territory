@@ -96,6 +96,13 @@ export const recordTradeAttempt = (itemId: ItemId, success: boolean, amount: num
   });
 };
 
+// Kill Tracking
+export const sectorKillCounts: Record<string, number> = {};
+
+export const recordKill = (sectorId: string) => {
+  sectorKillCounts[sectorId] = (sectorKillCounts[sectorId] || 0) + 1;
+};
+
 let lastRender = 0;
 
 export const analyticsSystem = (time: number) => {
