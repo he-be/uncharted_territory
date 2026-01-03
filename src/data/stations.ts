@@ -160,12 +160,12 @@ export const STATION_CONFIGS: Record<StationType, StationConfig> = {
       consumes: [
         { itemId: 'food', rate: 100 },
         { itemId: 'energy', rate: 100 },
-        { itemId: 'engine', rate: 20 },
-        { itemId: 'sensors', rate: 20 },
-        { itemId: 'steel', rate: 100 },
+        { itemId: 'engine', rate: 10 },
+        { itemId: 'sensors', rate: 10 },
+        { itemId: 'steel', rate: 50 },
       ],
       produces: [{ itemId: 'spaceship', rate: 1 }],
-      interval: 60000,
+      interval: 20000,
     },
     initInventory: {
       food: 5000,
