@@ -311,6 +311,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
     drone.setData('hp', 30);
     drone.setData('target', null);
     drone.setData('lastFired', 0);
+    // Strafing Init
+    drone.setData('strafeDir', Math.random() < 0.5 ? 1 : -1);
+    drone.setData('nextStrafeTime', 0);
 
     this.createMinimapSymbol(drone, isFriendly ? 'ally' : 'enemy');
     this.cameras.getCamera('minimap')?.ignore(drone);
@@ -537,22 +540,44 @@ export class CombatPrototypeScene extends Phaser.Scene {
             entity.setAcceleration(0);
           }
         } else {
-          // Drone Logic (Orbit 200-400)
-          if (dist > 400) {
-            this.physics.velocityFromRotation(
-              angle,
-              this.SPEED_DRONE_MAX,
-              entity.body.acceleration
-            );
-          } else if (dist < 200) {
-            this.physics.velocityFromRotation(
-              angle,
-              -this.SPEED_DRONE_MAX * 0.5,
-              entity.body.acceleration
-            );
-          } else {
-            entity.setAcceleration(0);
+          // Drone Logic (Orbit 200-400) with Strafe
+
+          // Manage Strafe Direction
+          let strafeDir = entity.getData('strafeDir') || 1;
+          const nextStrafe = entity.getData('nextStrafeTime') || 0;
+          if (time > nextStrafe) {
+            strafeDir *= -1;
+            entity.setData('strafeDir', strafeDir);
+            entity.setData('nextStrafeTime', time + 2000 + Math.random() * 2000); // 2-4s switch
           }
+
+          const speed = this.SPEED_DRONE_MAX;
+          const correction = new Phaser.Math.Vector2();
+
+          // Distance Maintenance
+          if (dist > 400) {
+            // Too far: approach
+            correction.setToPolar(angle, speed);
+          } else if (dist < 200) {
+            // Too close: back off
+            correction.setToPolar(angle, -speed);
+          } else {
+            // In sweet spot: weak approach/retreat to maintain ~300
+            const diff = dist - 300;
+            correction.setToPolar(angle, diff * 0.5);
+          }
+
+          // Strafing Component (Perpendicular)
+          const strafeVec = new Phaser.Math.Vector2().setToPolar(
+            angle + Math.PI / 2,
+            speed * 0.8 * strafeDir
+          );
+
+          // Combine
+          const finalAccel = correction.add(strafeVec);
+
+          // Apply
+          entity.setAcceleration(finalAccel.x, finalAccel.y);
         }
 
         // Fire
