@@ -121,12 +121,13 @@ export class CombatPrototypeScene extends Phaser.Scene {
   }
 
   private createMinimap() {
-    const size = 200;
+    const size = 320; // Increased by 60% (from 200)
     const margin = 20;
     const x = this.scale.width - size - margin;
     const y = this.scale.height - size - margin;
 
-    const minimap = this.cameras.add(x, y, size, size).setZoom(0.05).setName('minimap');
+    // Zoom 0.08 covers 320/0.08 = 4000 world units (Perfect fit)
+    const minimap = this.cameras.add(x, y, size, size).setZoom(0.08).setName('minimap');
     minimap.setBackgroundColor(0x000000);
     minimap.scrollX = 2000; // Center of world
     minimap.scrollY = 2000;
