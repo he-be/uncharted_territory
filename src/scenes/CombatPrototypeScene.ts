@@ -83,7 +83,34 @@ export class CombatPrototypeScene extends Phaser.Scene {
       g.generateTexture('projectile_pd', 2, 16);
     }
 
+    // Generate Friendly Laser (Cyan)
+    if (!this.textures.exists('laser_friendly')) {
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x00ffff, 1);
+      g.fillRect(0, 0, 12, 3);
+      g.generateTexture('laser_friendly', 12, 3);
+    }
+
+    // Generate Enemy Laser (Red)
+    if (!this.textures.exists('laser_enemy')) {
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0xff0000, 1);
+      g.fillRect(0, 0, 12, 3);
+      g.generateTexture('laser_enemy', 12, 3);
+    }
+
     // 1. Setup World
+    this.physics.world.setBounds(0, 0, 4000, 4000);
+    // ... (existing setup code skipped for brevity in tool call, but strictly careful with line numbers)
+    // Note: I cannot skip lines in replace_file_content unless I use chunks.
+    // Since I need to edit create() AND collision handlers which are far apart, I should use multi_replace.
+    // But I will stick to separate replace calls or use multi if supported well.
+    // Using separate calls is safer.
+
+    // ...
+    // Actually, I will split this into two tool calls.
+    // 1. Texture Generation in create()
+    // 2. Collision Logic at bottom.
     this.physics.world.setBounds(0, 0, 4000, 4000);
     this.add.tileSprite(0, 0, 4000, 4000, 'bg_stars').setOrigin(0).setAlpha(0.2);
 
@@ -347,9 +374,15 @@ export class CombatPrototypeScene extends Phaser.Scene {
   // --- Collision Callbacks ---
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private isLaser(obj: any): boolean {
+    const key = obj.texture.key;
+    return key === 'projectile_laser' || key === 'laser_friendly' || key === 'laser_enemy';
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private checkOwner(obj1: any, obj2: any): boolean {
-    const isL1 = obj1.texture.key === 'projectile_laser';
-    const isL2 = obj2.texture.key === 'projectile_laser';
+    const isL1 = this.isLaser(obj1);
+    const isL2 = this.isLaser(obj2);
 
     if (isL1 && isL2) return false;
     if (!isL1 && !isL2) return true;
@@ -384,7 +417,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private handleLaserHit(obj1: any, obj2: any) {
-    const isL1 = obj1.texture.key === 'projectile_laser';
+    const isL1 = this.isLaser(obj1);
     const laser = isL1 ? obj1 : obj2;
     const target = isL1 ? obj2 : obj1;
 

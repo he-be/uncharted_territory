@@ -45,12 +45,22 @@ export class WeaponModule extends CombatModule {
     const spawnX = x + offsetVec.x;
     const spawnY = y + offsetVec.y;
 
-    const laser = this.lasers.create(spawnX, spawnY, 'projectile_laser');
+    const faction = this.parent.getData('faction');
+    const isFriendly = faction === 'player' || faction === 'ally';
+    const textureKey =
+      faction === undefined ? 'projectile_laser' : isFriendly ? 'laser_friendly' : 'laser_enemy';
+
+    const laser = this.lasers.create(spawnX, spawnY, textureKey);
     if (!laser) return;
 
-    laser.setScale(0.01);
+    if (textureKey !== 'projectile_laser') {
+      laser.setScale(1);
+    } else {
+      laser.setScale(0.01);
+      laser.setTint(0xffff00);
+    }
+
     laser.setRotation(rot);
-    laser.setTint(0xffff00);
     laser.setData('owner', this.parent);
 
     this.scene.cameras.getCamera('minimap')?.ignore(laser);

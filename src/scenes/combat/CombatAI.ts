@@ -152,18 +152,30 @@ export class CombatAI {
   private fireLaser(source: any) {
     if (!source.active) return;
 
+    // Determine texture based on faction
+    const faction = source.getData('faction');
+    const isFriendly = faction === 'player' || faction === 'ally';
+    const texture =
+      faction === undefined ? 'projectile_laser' : isFriendly ? 'laser_friendly' : 'laser_enemy';
+
     // Duplicate fire logic for now to avoid circular deps or complex passing
     // Spawn Offset: 60px ahead
     const offset = new Phaser.Math.Vector2().setToPolar(source.rotation, 60);
     const spawnX = source.x + offset.x;
     const spawnY = source.y + offset.y;
 
-    const laser = this.lasers.create(spawnX, spawnY, 'projectile_laser');
+    const laser = this.lasers.create(spawnX, spawnY, texture);
     if (!laser) return;
 
-    laser.setScale(0.01); // SCALE_LASER
+    if (texture !== 'projectile_laser') {
+      laser.setScale(1);
+    } else {
+      laser.setScale(0.01); // SCALE_LASER
+      laser.setTint(0xffff00);
+    }
+
     laser.setRotation(source.rotation);
-    laser.setTint(0xffff00);
+    // laser.setTint(0xffff00); // Handled above
 
     laser.setData('owner', source);
     this.scene.cameras.getCamera('minimap')?.ignore(laser);
