@@ -1,4 +1,7 @@
 import Phaser from 'phaser';
+import { CombatAI } from './combat/CombatAI';
+import { CombatPD } from './combat/CombatPD';
+import { CombatMinimap } from './combat/CombatMinimap';
 
 interface CombatConfig {
   playerDrones: number;
@@ -15,14 +18,17 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
   private hpText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
-  private debugText!: Phaser.GameObjects.Text;
+  // private debugText!: Phaser.GameObjects.Text; // Removed unused
 
   private enemies!: Phaser.Physics.Arcade.Group;
   private friendlies!: Phaser.Physics.Arcade.Group;
   private lasers!: Phaser.Physics.Arcade.Group;
-  private pdProjectiles!: Phaser.Physics.Arcade.Group; // Point Defense Group
-  private minimapGroup!: Phaser.GameObjects.Group;
-  private lastPdTime = 0; // Cooldown tracker
+  private pdProjectiles!: Phaser.Physics.Arcade.Group;
+
+  // Modules
+  private aiSystem!: CombatAI;
+  private pdSystem!: CombatPD;
+  private minimapSystem!: CombatMinimap;
 
   private config: CombatConfig = { playerDrones: 5, enemyDrones: 5, enemyCount: 1 };
 
@@ -34,12 +40,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
   private readonly SPEED_PLAYER_MAX = 200;
   private readonly SPEED_PLAYER_ACCEL = 200;
   private readonly SPEED_PLAYER_ROTATION = 150;
-
-  private readonly SPEED_DRONE_MAX = 150;
   private readonly SPEED_LASER = 400;
-
-  // AI Throttling
-  private lastAiUpdate = 0;
 
   constructor() {
     super({ key: 'CombatPrototypeScene' });
@@ -59,37 +60,11 @@ export class CombatPrototypeScene extends Phaser.Scene {
   }
 
   create() {
-    console.log('[CombatPrototypeScene] Created (V2 Clean Ver)');
+    console.log('[CombatPrototypeScene] Created (Refactored)');
 
     // 1. Setup World
     this.physics.world.setBounds(0, 0, 4000, 4000);
     this.add.tileSprite(0, 0, 4000, 4000, 'bg_stars').setOrigin(0).setAlpha(0.2);
-
-    // Debug UI - DISABLED FOR STABILITY CHECK
-    /*
-    this.debugText = this.add
-      .text(10, 80, 'FPS: 00 | MS: 00', {
-        fontSize: '16px',
-        color: '#ffff00',
-        backgroundColor: '#000000',
-      })
-      .setScrollFactor(0)
-      .setDepth(100);
-    this.time.addEvent({
-      delay: 1000,
-      loop: true,
-      callback: () => {
-        if (this.game && this.game.loop) {
-             this.debugText.setText(
-               `FPS: ${this.game.loop.actualFps.toFixed(1)} | MS: ${this.game.loop.delta.toFixed(1)}`
-             );
-             if (this.game.loop.actualFps < 50) {
-               console.warn(`[Performance] Low FPS: ${this.game.loop.actualFps}`);
-             }
-        }
-      },
-    });
-    */
 
     // 2. Setup Groups
     this.enemies = this.physics.add.group({ enable: true, runChildUpdate: true });
@@ -105,18 +80,12 @@ export class CombatPrototypeScene extends Phaser.Scene {
       runChildUpdate: true,
     });
 
-    // PD Texture Generation (Simple Yellow Bar)
-    if (!this.textures.exists('projectile_pd')) {
-      const pdG = this.make.graphics({ x: 0, y: 0 });
-      pdG.fillStyle(0xffff00, 1);
-      pdG.fillRect(0, 0, 2, 16);
-      pdG.generateTexture('projectile_pd', 2, 16);
-    }
+    // 3. Init Modules
+    this.aiSystem = new CombatAI(this, this.lasers);
+    this.pdSystem = new CombatPD(this, this.pdProjectiles, this.lasers);
+    this.minimapSystem = new CombatMinimap(this);
 
-    // Minimap Symbol Group
-    this.minimapGroup = this.add.group();
-
-    // 3. Create Player (Immediately init Data)
+    // 4. Create Player
     this.player = this.physics.add.image(2000, 3500, 'player_ship');
     this.player.setScale(this.SCALE_SHIP);
     this.player.setDepth(10);
@@ -125,20 +94,16 @@ export class CombatPrototypeScene extends Phaser.Scene {
     this.player.setMaxVelocity(this.SPEED_PLAYER_MAX);
     this.player.setCollideWorldBounds(true);
 
-    // IMPORTANT: Init HP immediately
     this.player.setData('name', 'Player');
     this.player.setData('hp', 100);
     this.player.setData('maxHp', 100);
-
-    // Fix: Start facing UP
     this.player.setRotation(-Math.PI / 2);
 
     this.cameras.main.startFollow(this.player);
 
-    // Add Player Symbol
-    this.createMinimapSymbol(this.player, 'player');
+    this.minimapSystem.createSymbol(this.player, 'player');
 
-    // 4. Setup Input
+    // 5. Setup Input
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.zoomKeys = {
@@ -148,10 +113,10 @@ export class CombatPrototypeScene extends Phaser.Scene {
       this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     }
 
-    // 5. Spawn Enemies
+    // 6. Spawn Enemies
     this.spawnEntities();
 
-    // 6. Setup Collisions (Robust Handler)
+    // 7. Setup Collisions
     this.physics.add.overlap(this.lasers, this.enemies, this.handleLaserHit, this.checkOwner, this);
     this.physics.add.overlap(this.lasers, this.player, this.handleLaserHit, this.checkOwner, this);
     this.physics.add.overlap(
@@ -161,22 +126,26 @@ export class CombatPrototypeScene extends Phaser.Scene {
       this.checkOwner,
       this
     );
-    // PD Collision
+    // PD Collision Delegate
     this.physics.add.overlap(
       this.pdProjectiles,
       this.lasers,
-      this.handlePDIntercept,
+      this.pdSystem.handleIntercept.bind(this.pdSystem), // Bind context!
       undefined,
       this
     );
 
-    // 7. UI & Minimap
+    // 8. UI & Minimap
     this.createUI();
-    this.createMinimap();
-
-    // 8. Camera Masking
-    // Main Camera: Ignore Symbols
-    this.cameras.main.ignore(this.minimapGroup);
+    this.minimapSystem.create([
+      this.hpText,
+      this.statusText,
+      this.player,
+      this.enemies,
+      this.friendlies,
+      this.lasers,
+      this.pdProjectiles,
+    ]);
   }
 
   private createUI() {
@@ -190,73 +159,6 @@ export class CombatPrototypeScene extends Phaser.Scene {
       .setDepth(100);
   }
 
-  private createMinimap() {
-    const size = 320;
-    const margin = 20;
-    const x = this.scale.width - size - margin;
-    const y = this.scale.height - size - margin;
-
-    const minimap = this.cameras.add(x, y, size, size).setZoom(0.08).setName('minimap');
-    minimap.setBackgroundColor(0x000000);
-    minimap.scrollX = 2000;
-    minimap.scrollY = 2000;
-
-    // Minimap Ignores: UI and REAL Sprites
-    // Note: Groups create children later, so we must ignore individual objects upon creation or update.
-    // For now, ignore static UI.
-    minimap.ignore([this.hpText, this.statusText]);
-    // Also ignore Player immediately
-    minimap.ignore(this.player);
-    // Important: Ignore existing enemies/friendlies groups entirely
-    minimap.ignore(this.enemies);
-    minimap.ignore(this.friendlies);
-    minimap.ignore(this.lasers);
-    minimap.ignore(this.pdProjectiles);
-
-    // Border
-    const graphics = this.add.graphics().setScrollFactor(0).setDepth(101);
-    graphics.lineStyle(2, 0x00ff00);
-    graphics.strokeRect(x, y, size, size);
-  }
-
-  private createMinimapSymbol(
-    entity: Phaser.GameObjects.GameObject,
-    type: 'player' | 'ally' | 'mother' | 'enemy'
-  ) {
-    const graphics = this.add.graphics();
-
-    // Shape & Color Logic
-    // Sizes are LARGE (World Space) because Zoom is 0.08.
-    // 100px -> 8px on minimap.
-
-    if (type === 'player') {
-      graphics.fillStyle(0x00ffff, 1); // Cyan
-      // Triangle pointing up (relative to rotation 0, which is Right)
-      // Phaser Rotation 0 = Right. We want a generic pointer.
-      // Let's draw a simple arrow head pointing Right (0 deg).
-      graphics.fillTriangle(60, 0, -40, -40, -40, 40);
-    } else if (type === 'ally') {
-      graphics.fillStyle(0x00ffff, 0.8);
-      graphics.fillCircle(0, 0, 40); // 80px diameter -> 6.4px dot
-    } else if (type === 'mother') {
-      graphics.fillStyle(0xff0000, 1); // Red
-      graphics.fillRect(-100, -100, 200, 200); // 200px square -> 16px box
-    } else if (type === 'enemy') {
-      graphics.fillStyle(0xff0000, 0.8);
-      graphics.fillCircle(0, 0, 40);
-    }
-
-    this.minimapGroup.add(graphics);
-
-    // Sync Logic: Store reference on entity
-    entity.setData('minimapSymbol', graphics);
-
-    // Auto-Destroy Logic
-    entity.on('destroy', () => {
-      graphics.destroy();
-    });
-  }
-
   private spawnEntities() {
     // Enemy Mothership
     const mx = 2000 + (Math.random() - 0.5) * 500;
@@ -265,20 +167,17 @@ export class CombatPrototypeScene extends Phaser.Scene {
     mother.setScale(this.SCALE_SHIP);
     mother.setTint(0xff0000);
     mother.setDepth(5);
-    // Boss: Reduced Drag, allow movement but slow
     mother.setDrag(200);
     mother.setAngularDrag(100);
-    mother.setMaxVelocity(30); // Very slow boss movement
+    mother.setMaxVelocity(30);
 
     mother.setData('type', 'mother');
     mother.setData('name', 'Enemy Mothership');
     mother.setData('hp', 1000);
     mother.setData('maxHp', 1000);
-
-    // Fix: Start facing DOWN
     mother.setRotation(Math.PI / 2);
 
-    this.createMinimapSymbol(mother, 'mother');
+    this.minimapSystem.createSymbol(mother, 'mother');
     this.cameras.getCamera('minimap')?.ignore(mother);
 
     // Enemy Drones
@@ -303,19 +202,20 @@ export class CombatPrototypeScene extends Phaser.Scene {
     drone.setScale(this.SCALE_DRONE);
     drone.setDepth(5);
     drone.setTint(isFriendly ? 0x00ff00 : 0xff0000);
-
     drone.setDrag(50);
-    drone.setMaxVelocity(this.SPEED_DRONE_MAX);
+    // Use MAX speed from Scene or pass constant? Scene property access is cleaner
+    drone.setMaxVelocity(150); // Hardcoded SPEED_DRONE_MAX for simplicity
 
     drone.setData('name', isFriendly ? 'Ally Drone' : 'Enemy Drone');
     drone.setData('hp', 30);
     drone.setData('target', null);
     drone.setData('lastFired', 0);
+
     // Strafing Init
     drone.setData('strafeDir', Math.random() < 0.5 ? 1 : -1);
     drone.setData('nextStrafeTime', 0);
 
-    this.createMinimapSymbol(drone, isFriendly ? 'ally' : 'enemy');
+    this.minimapSystem.createSymbol(drone, isFriendly ? 'ally' : 'enemy');
     this.cameras.getCamera('minimap')?.ignore(drone);
   }
 
@@ -352,7 +252,11 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     if (this.fireKey.isDown) {
       const lastFired = this.player.getData('lastFired') || 0;
-      if (time > lastFired + 50) {
+      if (time > lastFired + 150) {
+        // Manual Fire Logic (keep here or move to module?)
+        // For player, keeping generic fireLaser here is fine for now
+        // But AI module needs access.
+        // Let's rely on standard fireLaser below.
         this.fireLaser(this.player);
         this.player.setData('lastFired', time);
       }
@@ -365,293 +269,59 @@ export class CombatPrototypeScene extends Phaser.Scene {
       this.cameras.main.setZoom(Math.max(0.1, this.cameras.main.zoom - 0.01));
     }
 
-    // --- AI Updates (Throttled to 100ms / 10 FPS) ---
-    // Fixes "Freezing" by reducing O(N^2) checks from 60/sec to 10/sec
-    if (time > this.lastAiUpdate + 100) {
-      this.updateAI(this.friendlies, this.enemies.getChildren(), time);
-      // Enemies target Player + Friendlies
-      const allEnemies: Phaser.GameObjects.GameObject[] = [
-        this.player,
-        ...this.friendlies.getChildren(),
-      ].filter((e) => e.active);
-      this.updateAI(this.enemies, allEnemies, time);
+    // --- Module Updates ---
+    this.aiSystem.update(time, this.friendlies, this.enemies, this.player);
+    this.pdSystem.update(time, this.player, this.friendlies);
 
-      this.lastAiUpdate = time;
-    }
-
-    // --- PD System Update ---
-    this.updatePD(time);
+    // Use minimap system to sync
+    this.minimapSystem.update([
+      ...this.friendlies.getChildren(),
+      ...this.enemies.getChildren(),
+      this.player,
+    ]);
 
     // --- Cleanup ---
     this.lasers.getChildren().forEach((l: Phaser.GameObjects.GameObject) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const laser = l as any;
       if (laser.active) {
-        // Out of bounds check
         if (laser.x < 0 || laser.x > 4000 || laser.y < 0 || laser.y > 4000) {
           laser.destroy();
         }
       }
     });
 
-    this.pdProjectiles.getChildren().forEach((p: Phaser.GameObjects.GameObject) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pd = p as any;
-      if (pd.active && (pd.x < 0 || pd.x > 4000 || pd.y < 0 || pd.y > 4000)) {
-        pd.destroy();
-      }
-    });
-
-    // SYNC MINIMAP SYMBOLS
-    [this.player, ...this.enemies.getChildren(), ...this.friendlies.getChildren()].forEach(
-      (e: Phaser.GameObjects.GameObject) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const entity = e as any;
-        if (entity.active) {
-          const symbol = entity.getData('minimapSymbol') as Phaser.GameObjects.Graphics;
-          if (symbol) {
-            symbol.setPosition(entity.x, entity.y);
-            symbol.setRotation(entity.rotation);
-          }
-        }
-      }
-    );
+    // PD cleanup handled in module
   }
 
-  private updatePD(time: number) {
-    if (!this.player.active) return;
-    if (time < this.lastPdTime + 20) return; // 5 shots/sec = 200ms
-
-    // 1. Find Threat
-    let nearestLaser: Phaser.Physics.Arcade.Image | null = null;
-    let minD = 500; // PD Range
-
-    this.lasers.getChildren().forEach((l: Phaser.GameObjects.GameObject) => {
-      const laser = l as Phaser.Physics.Arcade.Image;
-      if (!laser.active) return;
-
-      const owner = laser.getData('owner');
-      // Ignore friendly fire
-      if (owner === this.player || this.friendlies.contains(owner)) return;
-
-      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, laser.x, laser.y);
-      if (d < minD) {
-        minD = d;
-        nearestLaser = laser;
-      }
-    });
-
-    if (nearestLaser) {
-      this.firePD(nearestLaser);
-      this.lastPdTime = time;
-    }
-  }
-
-  private firePD(target: Phaser.Physics.Arcade.Image) {
-    // Predict Intercept or simply Aim at target
-    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
-
-    // Fire 2 shots from offsets
-    const offsets = [0]; // Left/Right hardpoints
-    offsets.forEach((off) => {
-      // Calculate spawn position relative to player facing
-      // Player facing is rotation.
-      // Right Vector is rotation + 90 deg?
-      const rightVec = new Phaser.Math.Vector2().setToPolar(
-        this.player.rotation + Math.PI / 2,
-        off
-      );
-      const spawnX = this.player.x + rightVec.x;
-      const spawnY = this.player.y + rightVec.y;
-
-      const pd = this.pdProjectiles.create(spawnX, spawnY, 'projectile_pd');
-      if (!pd) return;
-
-      // Align bar graphic to travel direction (angle).
-      // Graphic is 4x12 (Vertical). Rotation 0 = Vertical.
-      // We want it 'long' part along velocity.
-      // Velocity Angle 0 = Right.
-      // So we need to rotate +90 to align vertical graphic with Horizontal velocity?
-      pd.setRotation(angle + Math.PI / 2);
-
-      this.physics.velocityFromRotation(angle, this.SPEED_LASER * 2, pd.body.velocity);
-
-      // Ignore in Minimap
-      this.cameras.getCamera('minimap')?.ignore(pd);
-
-      // Short Life
-      this.time.delayedCall(1500, () => {
-        if (pd.active) pd.destroy();
-      });
-    });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private handlePDIntercept(pd: any, laser: any) {
-    if (pd.active) pd.destroy();
-    if (laser.active) laser.destroy();
-    // Future: Add small explosion particle
-  }
-
-  private updateAI(
-    group: Phaser.Physics.Arcade.Group,
-    validTargets: Phaser.GameObjects.GameObject[],
-    time: number
-  ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    group.getChildren().forEach((entity: any) => {
-      if (!entity.active) return;
-
-      const isMother = entity.getData('type') === 'mother';
-
-      // 1. Acquire Target
-      let target = entity.getData('target');
-      if (!target || !target.active) {
-        target = this.findNearestTarget(entity, validTargets);
-        entity.setData('target', target);
-      }
-
-      // 2. Engage
-      if (target && target.active) {
-        const dist = Phaser.Math.Distance.Between(entity.x, entity.y, target.x, target.y);
-        const angle = Phaser.Math.Angle.Between(entity.x, entity.y, target.x, target.y);
-
-        // Mothership turns slowly
-        if (isMother) {
-          // Simple gradual turn
-          // entity.rotation = Phaser.Math.Angle.RotateTo(entity.rotation, angle, 0.01);
-          // For physics consistency, let's just snap rotation for now or use angular velocity?
-          // Let's just set rotation to face target for accuracy
-          entity.setRotation(angle);
-        } else {
-          entity.setRotation(angle);
-        }
-
-        if (isMother) {
-          // Mothership Logic:
-          // Stay distant. If too close, maybe back up? Or just sit there?
-          // "Restore behavior" -> user likely wants it to move/engage.
-          // Let's make it slowly move towards optimal range (800)
-          if (dist > 800) {
-            this.physics.velocityFromRotation(angle, 30, entity.body.acceleration);
-          } else if (dist < 400) {
-            this.physics.velocityFromRotation(angle, -10, entity.body.acceleration);
-          } else {
-            entity.setAcceleration(0);
-          }
-        } else {
-          // Drone Logic (Orbit 200-400) with Strafe
-
-          // Manage Strafe Direction
-          let strafeDir = entity.getData('strafeDir') || 1;
-          const nextStrafe = entity.getData('nextStrafeTime') || 0;
-          if (time > nextStrafe) {
-            strafeDir *= -1;
-            entity.setData('strafeDir', strafeDir);
-            entity.setData('nextStrafeTime', time + 2000 + Math.random() * 2000); // 2-4s switch
-          }
-
-          const speed = this.SPEED_DRONE_MAX;
-          const correction = new Phaser.Math.Vector2();
-
-          // Distance Maintenance
-          if (dist > 400) {
-            // Too far: approach
-            correction.setToPolar(angle, speed);
-          } else if (dist < 200) {
-            // Too close: back off
-            correction.setToPolar(angle, -speed);
-          } else {
-            // In sweet spot: weak approach/retreat to maintain ~300
-            const diff = dist - 300;
-            correction.setToPolar(angle, diff * 0.5);
-          }
-
-          // Strafing Component (Perpendicular)
-          const strafeVec = new Phaser.Math.Vector2().setToPolar(
-            angle + Math.PI / 2,
-            speed * 0.8 * strafeDir
-          );
-
-          // Combine
-          const finalAccel = correction.add(strafeVec);
-
-          // Apply
-          entity.setAcceleration(finalAccel.x, finalAccel.y);
-        }
-
-        // Fire
-        const range = isMother ? 1000 : 600;
-        if (dist < range) {
-          const lastFired = entity.getData('lastFired') || 0;
-          // Mothership fires faster? Or same? Let's say slightly faster 800ms
-          const cooldown = isMother ? 800 : 1000;
-
-          if (time > lastFired + cooldown) {
-            if (Math.random() < 0.5) {
-              this.fireLaser(entity);
-              entity.setData('lastFired', time);
-            }
-          }
-        }
-      } else {
-        entity.setAcceleration(0); // Idle
-      }
-    });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private findNearestTarget(source: any, targets: any[]): any {
-    let nearest = null;
-    let minD = 99999;
-    for (const t of targets) {
-      if (!t.active) continue;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const target = t as any;
-      const d = Phaser.Math.Distance.Between(source.x, source.y, target.x, target.y);
-      if (d < minD) {
-        minD = d;
-        nearest = t;
-      }
-    }
-    return nearest;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private fireLaser(source: any) {
+  // Exposed for AI Module usage if needed, or kept private here?
+  // AI Module has its own 'fireLaser' impl for now to avoid dependency loops.
+  // Ideally we share a helper.
+  private fireLaser(source: Phaser.Physics.Arcade.Image) {
     if (!source.active) return;
 
-    // Spawn Offset: 60px ahead to avoid self-collision
     const offset = new Phaser.Math.Vector2().setToPolar(source.rotation, 60);
     const spawnX = source.x + offset.x;
     const spawnY = source.y + offset.y;
 
     const laser = this.lasers.create(spawnX, spawnY, 'projectile_laser');
-    if (!laser) return; // Pool empty
+    if (!laser) return;
 
     laser.setScale(this.SCALE_LASER);
     laser.setRotation(source.rotation);
     laser.setTint(0xffff00);
 
-    // Metadata for owner check
     laser.setData('owner', source);
 
-    // Hide laser from minimap
     this.cameras.getCamera('minimap')?.ignore(laser);
 
-    // Velocity
     this.physics.velocityFromRotation(source.rotation, this.SPEED_LASER, laser.body.velocity);
-    // Add source velocity for momentum conservation? Optional. Let's keep it simple for now.
-    // laser.body.velocity.x += source.body.velocity.x;
-    // laser.body.velocity.y += source.body.velocity.y;
 
-    // Safety: Disable body for 50ms to strictly prevent spawn overlap
     laser.body.enable = false;
     this.time.delayedCall(50, () => {
       if (laser.active) laser.body.enable = true;
     });
 
-    // Life: 2 sec
     this.time.delayedCall(2000, () => {
       if (laser.active) laser.destroy();
     });
@@ -661,21 +331,18 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private checkOwner(obj1: any, obj2: any): boolean {
-    // Robustly determine which is laser
     const isL1 = obj1.texture.key === 'projectile_laser';
     const isL2 = obj2.texture.key === 'projectile_laser';
 
-    if (isL1 && isL2) return false; // Laser vs Laser collision ignored (usually)
-    if (!isL1 && !isL2) return true; // Entity vs Entity collision (allowed)
+    if (isL1 && isL2) return false;
+    if (!isL1 && !isL2) return true;
 
     const laser = isL1 ? obj1 : obj2;
     const target = isL1 ? obj2 : obj1;
     const owner = laser.getData('owner');
 
-    // 1. Self Collision Check
     if (owner === target) return false;
 
-    // 2. Team Logic (No Friendly Fire)
     const isOwnerPlayerSide = owner === this.player || this.friendlies.contains(owner);
     const isTargetPlayerSide = target === this.player || this.friendlies.contains(target);
 
@@ -690,7 +357,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     if (laser.active) laser.destroy();
     if (target.active) {
-      this.takeDamage(target, 5); // Standard Damage 5
+      this.takeDamage(target, 5);
     }
   }
 
@@ -707,26 +374,21 @@ export class CombatPrototypeScene extends Phaser.Scene {
     hp -= amount;
     entity.setData('hp', hp);
 
-    // UI Update if Player
     if (entity === this.player) {
       console.log(`[Player] HP: ${hp} (-${amount})`);
       this.hpText.setText(`HP: ${Math.max(0, hp)}`);
       this.cameras.main.shake(100, 0.005);
     }
 
-    // Death Check
     if (hp <= 0) {
       console.log(`[Combat] ${name} Destroyed.`);
       entity.destroy();
     } else {
-      // Flash Effect
       entity.setTint(0xffffff);
       this.time.delayedCall(50, () => {
         if (!entity.active) return;
-        // Restore Tint based on faction
         if (entity === this.player) entity.clearTint();
-        else if (entity.getData('type') === 'mother')
-          entity.setTint(0xff0000); // Keep Red
+        else if (entity.getData('type') === 'mother') entity.setTint(0xff0000);
         else {
           const isFriendly = this.friendlies.contains(entity);
           entity.setTint(isFriendly ? 0x00ff00 : 0xff0000);
