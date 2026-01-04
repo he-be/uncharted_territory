@@ -96,6 +96,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
       g.fillStyle(0xffff00, 1);
       g.fillRect(0, 0, 2, 16);
       g.generateTexture('projectile_pd', 2, 16);
+      g.destroy();
     }
 
     // Generate Friendly Laser (Cyan)
@@ -104,6 +105,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
       g.fillStyle(0x00ffff, 1);
       g.fillRect(0, 0, 12, 3);
       g.generateTexture('laser_friendly', 12, 3);
+      g.destroy();
     }
 
     // Generate Enemy Laser (Red)
@@ -112,6 +114,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
       g.fillStyle(0xff0000, 1);
       g.fillRect(0, 0, 12, 3);
       g.generateTexture('laser_enemy', 12, 3);
+      g.destroy(); // Cleanup
     }
 
     // 1. Setup World
@@ -421,14 +424,18 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // Update Battle Stats
     const friendlyCount = this.friendlies.countActive();
     const enemyCount = this.enemies.countActive();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const friendlyDrones = this.friendlies
       .getChildren()
-      .filter((e: any) => e.active && e.getData('type') === 'drone').length;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter(
+        (e: Phaser.GameObjects.GameObject) => e.active && e.getData('type') === 'drone'
+      ).length;
+
     const enemyDrones = this.enemies
       .getChildren()
-      .filter((e: any) => e.active && e.getData('type') === 'drone').length;
+      .filter(
+        (e: Phaser.GameObjects.GameObject) => e.active && e.getData('type') === 'drone'
+      ).length;
 
     this.battleStatsText.setText(
       `Allies: ${friendlyCount} (Drones: ${friendlyDrones})\n` +

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 export class CombatMinimap {
   private scene: Phaser.Scene;
   private minimapGroup: Phaser.GameObjects.Group;
+  private borderGraphics!: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -24,9 +25,14 @@ export class CombatMinimap {
     ignoreObjects.forEach((obj) => minimap.ignore(obj));
 
     // Border
-    const graphics = this.scene.add.graphics().setScrollFactor(0).setDepth(101);
-    graphics.lineStyle(2, 0x00ff00);
-    graphics.strokeRect(x, y, size, size);
+    this.borderGraphics = this.scene.add.graphics().setScrollFactor(0).setDepth(101);
+    this.borderGraphics.lineStyle(2, 0x00ff00);
+    this.borderGraphics.strokeRect(x, y, size, size);
+
+    // Minimap should NOT see its own UI border (it's drawn on Main cam)
+    minimap.ignore(this.borderGraphics);
+
+    // Main Camera needs to ignore symbols
 
     // Main Camera needs to ignore symbols
     this.scene.cameras.main.ignore(this.minimapGroup);
@@ -110,10 +116,7 @@ export class CombatMinimap {
     }
 
     // 2. Update Symbols with Scale Compensation
-    const minScaleRatio = 0.1; // Maintain at least ~10% of viewport relative size? No, this is world scale factor.
-    // If zoom is 0.01, we want scale to be 10. (10 * 0.01 = 0.1).
-    // Original size ~80px. 0.1 screen relative?
-    // Let's use simpler math: Target World Scale = Base / Zoom
+    // Target World Scale = Base / Zoom
 
     entities.forEach((e: Phaser.GameObjects.GameObject) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
