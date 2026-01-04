@@ -349,7 +349,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     if (this.fireKey.isDown) {
       const lastFired = this.player.getData('lastFired') || 0;
-      if (time > lastFired + 150) {
+      if (time > lastFired + 50) {
         this.fireLaser(this.player);
         this.player.setData('lastFired', time);
       }
