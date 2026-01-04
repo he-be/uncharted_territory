@@ -107,10 +107,10 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // PD Texture Generation (Simple Yellow Bar)
     if (!this.textures.exists('projectile_pd')) {
-      const pdG = this.make.graphics({ x: 0, y: 0, add: false });
+      const pdG = this.make.graphics({ x: 0, y: 0 });
       pdG.fillStyle(0xffff00, 1);
-      pdG.fillRect(0, 0, 4, 12);
-      pdG.generateTexture('projectile_pd', 4, 12);
+      pdG.fillRect(0, 0, 2, 16);
+      pdG.generateTexture('projectile_pd', 2, 16);
     }
 
     // Minimap Symbol Group
@@ -413,7 +413,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
   private updatePD(time: number) {
     if (!this.player.active) return;
-    if (time < this.lastPdTime + 200) return; // 5 shots/sec = 200ms
+    if (time < this.lastPdTime + 20) return; // 5 shots/sec = 200ms
 
     // 1. Find Threat
     let nearestLaser: Phaser.Physics.Arcade.Image | null = null;
@@ -445,7 +445,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
 
     // Fire 2 shots from offsets
-    const offsets = [20, -20]; // Left/Right hardpoints
+    const offsets = [0]; // Left/Right hardpoints
     offsets.forEach((off) => {
       // Calculate spawn position relative to player facing
       // Player facing is rotation.
@@ -467,7 +467,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
       // So we need to rotate +90 to align vertical graphic with Horizontal velocity?
       pd.setRotation(angle + Math.PI / 2);
 
-      this.physics.velocityFromRotation(angle, this.SPEED_LASER, pd.body.velocity);
+      this.physics.velocityFromRotation(angle, this.SPEED_LASER * 2, pd.body.velocity);
 
       // Ignore in Minimap
       this.cameras.getCamera('minimap')?.ignore(pd);
