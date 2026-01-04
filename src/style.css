@@ -3,7 +3,9 @@ body {
   padding: 0;
   background-color: #000;
   overflow: hidden;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  /* Harmonize with Japanese (Hiragino/YuGothic automatically handled by browser fallback mostly, but explicit is safer) */
+  font-feature-settings: 'palt';
 }
 
 #ui-layer {
@@ -149,7 +151,7 @@ button:hover {
   /* Scrollbar appears as needed */
   padding: 10px;
   pointer-events: auto;
-  font-family: 'Courier New', monospace;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
   z-index: 1000;
   display: flex;
@@ -205,7 +207,9 @@ button:hover {
   justify-content: center;
   align-items: center;
   color: #fff;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family:
+    'Avenir Next', 'Helvetica Neue', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  font-weight: 600;
 }
 
 .result-content {
