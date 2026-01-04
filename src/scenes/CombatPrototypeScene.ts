@@ -347,8 +347,12 @@ export class CombatPrototypeScene extends Phaser.Scene {
       this.player.setAngularVelocity(0);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.fireKey)) {
-      this.fireLaser(this.player);
+    if (this.fireKey.isDown) {
+      const lastFired = this.player.getData('lastFired') || 0;
+      if (time > lastFired + 150) {
+        this.fireLaser(this.player);
+        this.player.setData('lastFired', time);
+      }
     }
 
     // --- Camera Zoom ---
