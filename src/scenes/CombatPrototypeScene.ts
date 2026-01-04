@@ -15,6 +15,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
   private hpText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+  private debugText!: Phaser.GameObjects.Text;
 
   private enemies!: Phaser.Physics.Arcade.Group;
   private friendlies!: Phaser.Physics.Arcade.Group;
@@ -58,6 +59,28 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // 1. Setup World
     this.physics.world.setBounds(0, 0, 4000, 4000);
     this.add.tileSprite(0, 0, 4000, 4000, 'bg_stars').setOrigin(0).setAlpha(0.2);
+
+    // Debug UI
+    this.debugText = this.add
+      .text(10, 80, 'FPS: 00 | MS: 00', {
+        fontSize: '16px',
+        color: '#ffff00',
+        backgroundColor: '#000000',
+      })
+      .setScrollFactor(0)
+      .setDepth(100);
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        this.debugText.setText(
+          `FPS: ${this.game.loop.actualFps.toFixed(1)} | MS: ${this.game.loop.delta.toFixed(1)}`
+        );
+        if (this.game.loop.actualFps < 50) {
+          console.warn(`[Performance] Low FPS: ${this.game.loop.actualFps}`);
+        }
+      },
+    });
 
     // 2. Setup Groups
     this.enemies = this.physics.add.group({ enable: true, runChildUpdate: true });
@@ -259,6 +282,8 @@ export class CombatPrototypeScene extends Phaser.Scene {
   }
 
   update(time: number) {
+    const start = performance.now();
+
     // ... (Controls logic needs slight adjustment for UP-facing default?)
     // Phaser velocityFromRotation uses the object's rotation.
     // If we rotate the sprite, 'up' key adding acceleration in 'rotation' direction works if 'rotation' is correct.
@@ -327,11 +352,8 @@ export class CombatPrototypeScene extends Phaser.Scene {
       this.cameras.main.setZoom(Math.max(0.1, this.cameras.main.zoom - 0.01));
     }
 
-    // --- AI Updates ---
-    // Restore Mothership Behavior
-    // We handle mothership distinctly or just treat it as a heavy drone?
-    // Let's modify updateAI to handle it.
-
+    // --- AI Updates (PROFILING) ---
+    const aiStart = performance.now();
     this.updateAI(this.friendlies, this.enemies.getChildren(), time);
     // Enemies target Player + Friendlies
     const allEnemies: Phaser.GameObjects.GameObject[] = [
@@ -339,6 +361,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
       ...this.friendlies.getChildren(),
     ].filter((e) => e.active);
     this.updateAI(this.enemies, allEnemies, time);
+    const aiEnd = performance.now();
 
     // --- Cleanup ---
     this.lasers.getChildren().forEach((l: Phaser.GameObjects.GameObject) => {
@@ -352,8 +375,20 @@ export class CombatPrototypeScene extends Phaser.Scene {
       }
     });
 
-    // Update Minimap Position (optional, or keep static full view)
-    // If map is static full view no update needed.
+    const mmEnd = performance.now();
+    const end = performance.now();
+    const total = end - start;
+    const aiTime = aiEnd - aiStart;
+
+    // Warn if frame takes > 16ms (drop below 60fps)
+    if (total > 16) {
+      // Throttle logs slightly to avoid freezing the console/browser too
+      if (Math.random() < 0.05) {
+        console.warn(
+          `[Performance Alert] Frame: ${total.toFixed(2)}ms | AI: ${aiTime.toFixed(2)}ms`
+        );
+      }
+    }
   }
 
   private updateAI(
