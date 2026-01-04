@@ -68,7 +68,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
   preload() {
     this.load.image('player_ship', 'assets/player_ship.png');
     this.load.image('npc_pirate', 'assets/npc_pirate.png');
-    this.load.image('npc_fighter', 'assets/npc_fighter.png');
+    this.load.image('npc_fighter', 'assets/drone_fighter_A.png');
     this.load.image('projectile_laser', 'assets/projectile_laser.png');
   }
 

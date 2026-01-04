@@ -19,7 +19,7 @@ export class DroneBayModule extends CombatModule {
     this.maxDrones = (config.params?.count as number) || 5;
     this.droneCount = 0; // Currently active from this bay
     this.droneGroup = droneGroup;
-    this.spawnInterval = 2000; // 2 sec per drone launch
+    this.spawnInterval = 500; // 2 sec per drone launch
   }
 
   update(time: number, _delta: number) {
@@ -54,7 +54,7 @@ export class DroneBayModule extends CombatModule {
     const isFriendly = faction === 'player'; // or 'ally'
 
     const drone = this.droneGroup.create(x, y, 'npc_fighter');
-    drone.setScale(0.015);
+    drone.setScale(0.03);
     drone.setDepth(5);
     drone.setTint(isFriendly ? 0x00ff00 : 0xff0000);
     drone.setDrag(50);
