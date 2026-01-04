@@ -2,12 +2,8 @@ import { DialogueOverlay } from '../ui/DialogueOverlay';
 
 interface GameState {
   playerHealth: number;
-  ammo: number;
-  killStreak: number;
-  deathStreak: number;
   battleDuration: number;
   enemiesNearby: number;
-  bossActive: boolean;
   momentum: number; // -100 to 100
   // Tactical Metrics
   nearestEnemyDist: number;
@@ -41,7 +37,6 @@ export class AlvaAgent {
 
     this.state = {
       playerHealth: 100,
-      killStreak: 0,
       battleDuration: 0,
       enemiesNearby: 0,
       momentum: 0,
@@ -83,6 +78,20 @@ export class AlvaAgent {
         description: `Phase changed to ${newPhase}`,
       });
     }
+
+    // Check for periodic update (Silence Breaker)
+    // Only if phase is not DEPLOYMENT (too early) or VICTORY (already handled)
+    const now = Date.now();
+    if (this.currentPhase !== 'DEPLOYMENT' && this.currentPhase !== 'VICTORY') {
+      if (now - this.lastCommentaryTime > 10000) {
+        // Force a situation report
+        this.reportEvent({
+          type: 'situation_report',
+          value: 0,
+          description: 'Periodic Situation Report',
+        });
+      }
+    }
   }
 
   public reportEvent(event: TriggerEvent) {
@@ -92,12 +101,18 @@ export class AlvaAgent {
 
     // Check cooldowns
     if (this.pendingRequest) return;
-    if (now - this.lastCommentaryTime < this.MIN_INTERVAL) return;
 
-    const categoryLastTime = this.categoryCooldowns.get(event.type) || 0;
-    // 10s cooldown for most, but phase_change should probably trigger immediately if possible?
-    // Let's keep 10s global for now.
-    if (now - categoryLastTime < 10000) return;
+    // Victory Exception: Always trigger immediately
+    if (event.type === 'victory') {
+      this.currentPhase = 'VICTORY';
+      // Force clear cooldown for victory
+      this.lastCommentaryTime = 0;
+    } else {
+      if (now - this.lastCommentaryTime < this.MIN_INTERVAL) return;
+
+      const categoryLastTime = this.categoryCooldowns.get(event.type) || 0;
+      if (now - categoryLastTime < 10000) return;
+    }
 
     // Trigger commentary
     this.generateCommentary(event);
@@ -189,6 +204,9 @@ export class AlvaAgent {
 - 5種類のバリエーションを生成
 - シールドには言及しない
 - 状況(Phase)に合わせた発言をする
+- 実況(situation_report)の場合、現在のフェーズや距離、残り敵数を含めて状況を整理する
+- VICTORYの場合、戦闘結果を称え、帰還を促す (例:「全機撃破を確認。作戦完了、帰投してください。」)
+
 
 【現在の戦況データ】
 ${contextJson}

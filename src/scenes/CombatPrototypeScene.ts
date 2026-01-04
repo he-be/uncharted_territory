@@ -4,6 +4,7 @@ import { CombatMinimap } from './combat/CombatMinimap';
 import { CombatModuleManager } from './combat/structure/ModuleManager';
 import { AlvaAgent } from '../combat/AlvaAgent';
 import { DialogueOverlay } from '../ui/DialogueOverlay';
+import { ResultOverlay } from '../ui/ResultOverlay';
 import type { ModuleConfig } from './combat/structure/CombatStructure';
 
 interface CombatConfig {
@@ -48,6 +49,11 @@ export class CombatPrototypeScene extends Phaser.Scene {
   private moduleManager!: CombatModuleManager; // New Manager
   private minimapSystem!: CombatMinimap;
   private alvaAgent!: AlvaAgent;
+  private resultOverlay!: ResultOverlay;
+
+  // State Tracking
+  private victoryTriggered = false;
+  private enemiesKilledCount = 0;
 
   // Default config if not passed
   private config: CombatConfig = {
@@ -272,6 +278,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // 8. UI & Minimap
     this.createUI();
     const overlay = new DialogueOverlay();
+    this.resultOverlay = new ResultOverlay();
     this.alvaAgent = new AlvaAgent(overlay);
     this.minimapSystem.create([
       this.hpText,
@@ -428,10 +435,42 @@ export class CombatPrototypeScene extends Phaser.Scene {
         nearestEnemyDist: nearestDist,
         closingSpeed: closingSpeed,
         timeToContact: timeToContact,
+        momentum: 0,
+      });
+    }
+
+    // --- Victory Check ---
+    // Make sure init is done (check simple flag or time > 1s to avoid instant win on load)
+    if (time > 1000 && this.enemies.countActive() === 0 && !this.victoryTriggered) {
+      this.victoryTriggered = true;
+
+      // Final Event
+      this.alvaAgent.reportEvent({
+        type: 'victory',
+        value: 1,
+        description: 'All enemies destroyed. Victory.',
+      });
+
+      // Show Result
+      const stats = {
+        time: time / 1000,
+        enemiesDefeated: this.enemiesKilledCount,
+      };
+
+      this.resultOverlay.show(stats, () => {
+        // Return to Title (or reload for now since Title scene might not exist or be named 'Menu')
+        // Just reload page for simple loop or go to Menu if exists.
+        // User asked for "Title", assume 'TitleScene' or just reload.
+        // Let's console log and reload for prototype safety.
+        console.log('Returning to Base...');
+        window.location.reload();
       });
     }
 
     // --- Player Controls ---
+    // DISABLE controls if victory? Maybe let them fly around during result?
+    // Let's keep controls for fun.
+
     if (this.cursors.up.isDown) {
       this.physics.velocityFromRotation(
         this.player.rotation,
@@ -611,6 +650,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
         this.alvaAgent.reportEvent({ type: 'player_death', value: 0, description: 'Player died' });
       } else if (entity.getData('faction') === 'enemy') {
         const isMother = entity.getData('type') === 'mother';
+        this.enemiesKilledCount++; // Track kills
         this.alvaAgent.reportEvent({
           type: 'enemy_killed',
           value: 1,
