@@ -363,15 +363,75 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // Update ALVA State
     if (this.alvaAgent) {
+      // Find nearest enemy
+      let nearestDist = 99999;
+
+      let _nearestEnemy = null;
+
+      const playerPos = new Phaser.Math.Vector2(this.player.x, this.player.y);
+
+      this.enemies.getChildren().forEach((child) => {
+        if (!child.active) return;
+        const e = child as Phaser.Physics.Arcade.Image;
+        const dist = Phaser.Math.Distance.BetweenPoints(playerPos, e);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          _nearestEnemy = e;
+        }
+      });
+
+      // Calculate closing speed (approximate)
+      // If we assume enemies generally move towards player or player towards them.
+      // We can use the players velocity projected onto the vector to the enemy.
+      // But simpler: just track distance delta if we had history, or just use current relative velocity.
+      // Let's use simple velocity projection.
+      let closingSpeed = 0;
+      let timeToContact = -1;
+
+      if (nearestDist < 20000) {
+        const pBody = this.player.body as Phaser.Physics.Arcade.Body;
+        const pVel = pBody.velocity;
+
+        // Vector to enemy
+        // We don't have enemy velocity easily available without casting, but let's assume static or simple.
+        // Actually, let's just use Player's speed towards enemy.
+        // If moving towards enemy, speed is positive.
+
+        // Vector P -> E
+        // We need the enemy object again.
+        if (_nearestEnemy) {
+          const e = _nearestEnemy as Phaser.Physics.Arcade.Image;
+          const vecToEnemy = new Phaser.Math.Vector2(
+            e.x - this.player.x,
+            e.y - this.player.y
+          ).normalize();
+
+          // Project player velocity on to this vector
+          const speedTowards = pVel.dot(vecToEnemy);
+
+          // Assume enemy moves towards player at constant speed? Or just neglect.
+          // Let's add enemy max speed approx (30-100) if they are aggressive?
+          // For now, just player closing speed is a good baseline or "Mutual Closing Speed".
+
+          closingSpeed = speedTowards;
+
+          if (closingSpeed > 10) {
+            timeToContact = nearestDist / closingSpeed;
+          }
+        }
+      }
+
       this.alvaAgent.updateState({
         battleDuration: time / 1000,
         enemiesNearby: this.enemies.countActive(),
         playerHealth: this.player.getData('hp'),
-        playerShield: 100, // Placeholder
         ammo: 100, // Placeholder
         bossActive: this.enemies
           .getChildren()
           .some((e) => e.active && e.getData('type') === 'mother'),
+        nearestEnemyDist: nearestDist,
+        closingSpeed: closingSpeed,
+        timeToContact: timeToContact,
       });
     }
 

@@ -2,7 +2,6 @@ import { DialogueOverlay } from '../ui/DialogueOverlay';
 
 interface GameState {
   playerHealth: number;
-  playerShield: number;
   ammo: number;
   killStreak: number;
   deathStreak: number;
@@ -10,6 +9,10 @@ interface GameState {
   enemiesNearby: number;
   bossActive: boolean;
   momentum: number; // -100 to 100
+  // Tactical Metrics
+  nearestEnemyDist: number;
+  closingSpeed: number; // Positive = closing
+  timeToContact: number; // Seconds, -1 if not closing
 }
 
 interface TriggerEvent {
@@ -36,7 +39,6 @@ export class AlvaAgent {
 
     this.state = {
       playerHealth: 100,
-      playerShield: 100,
       ammo: 100,
       killStreak: 0,
       deathStreak: 0,
@@ -44,6 +46,9 @@ export class AlvaAgent {
       enemiesNearby: 0,
       bossActive: false,
       momentum: 0,
+      nearestEnemyDist: 99999,
+      closingSpeed: 0,
+      timeToContact: -1,
     };
 
     if (!this.apiKey) {
@@ -114,18 +119,36 @@ export class AlvaAgent {
   }
 
   private constructPrompt(trigger: TriggerEvent): string {
+    // Determine Phase
+    let phase = 'UNKNOWN';
+    if (this.state.battleDuration < 10) {
+      phase = 'DEPLOYMENT (Start)';
+    } else if (this.state.nearestEnemyDist > 2000) {
+      phase = 'APPROACH (Moving to frontline)';
+    } else if (this.state.nearestEnemyDist > 800) {
+      phase = 'SKIRMISH (Long range)';
+    } else {
+      phase = 'MELEE (Close combat)';
+    }
+
     const contextJson = JSON.stringify(
       {
         trigger_type: trigger.type,
         trigger_value: trigger.value,
+        phase: phase,
+        tactical: {
+          distance_to_enemy: Math.round(this.state.nearestEnemyDist),
+          closing_speed: Math.round(this.state.closingSpeed),
+          time_to_contact:
+            this.state.timeToContact > 0 ? `${Math.round(this.state.timeToContact)}s` : 'N/A',
+        },
         player_state: {
           health: this.state.playerHealth,
-          shield: this.state.playerShield,
           ammo: this.state.ammo,
         },
         battle_state: {
-          duration: this.state.battleDuration,
-          enemies: this.state.enemiesNearby,
+          duration: Math.round(this.state.battleDuration),
+          enemies_nearby: this.state.enemiesNearby,
           boss: this.state.bossActive,
           momentum: this.state.momentum,
         },
@@ -136,32 +159,34 @@ export class AlvaAgent {
     );
 
     return `
-あなたはA.L.V.A.、2Dドローン戦闘ゲームのAIコンパニオンです。
-プレイヤーの行動と戦況に応じてリアルタイムでコメントします。
+あなたはA.L.V.A.、SFドローン艦隊戦のAI戦術オペレーターです。
+プレイヤー(母艦)とドローン部隊が、敵艦隊に向かって進軍しています。
+
+【世界観・ルール】
+- **シールド機能は存在しません**。「シールド」という言葉は絶対に使わないでください。
+- 戦闘の流れ: 出撃 → 接敵行軍 → 遠距離戦 → 混戦
+- プレイヤーは母艦としてドローンと共に前進します。
 
 【キャラクター設定】
-- 冷静で頼れる戦術アドバイザー
-- 感情は抑え目だが、決定的瞬間には興奮を見せる
-- プレイヤーを「パイロット」と呼ばず、対等なパートナーとして扱う
-- 敬語は使わない、簡潔で直接的な口調
+- 冷静で的確な戦術眼を持つ
+- 距離や時間を具体的に言及すると「AIらしさ」が出る
+  - 例:「接敵まであと20秒」「距離1500、射程外」
+- 感情は抑え目だが、戦況が悪化すると焦りを見せる
 
 【制約】
 - 全てのセリフは80文字以内
 - 5種類のバリエーションを生成
-- 感嘆符「！」は控えめに
-- 「...」は緊張感や余韻を表現する時のみ使用
+- シールドには言及しない
+- 状況(Phase)に合わせた発言をする
 
-【現在の状況】
+【現在の戦況データ】
 ${contextJson}
 
 【タスク】
-上記状況に対するA.L.V.A.のセリフを5種類生成してください。
+上記戦況データに基づき、状況に適した実況セリフを5つ生成せよ。
 出力形式:
-1. [セリフ1]
-2. [セリフ2]
-3. [セリフ3]
-4. [セリフ4]
-5. [セリフ5]
+1. [セリフ]
+...
 `;
   }
 
