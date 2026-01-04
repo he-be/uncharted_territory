@@ -161,6 +161,13 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // 7. Setup Collisions
 
+    // Ship Collisions (Push/Bounce, No Damage)
+    this.physics.add.collider(this.player, this.enemies);
+    this.physics.add.collider(this.player, this.friendlies);
+    this.physics.add.collider(this.enemies, this.friendlies);
+    this.physics.add.collider(this.enemies, this.enemies);
+    this.physics.add.collider(this.friendlies, this.friendlies);
+
     this.physics.add.overlap(this.lasers, this.enemies, this.handleLaserHit, this.checkOwner, this);
     this.physics.add.overlap(this.lasers, this.player, this.handleLaserHit, this.checkOwner, this);
     this.physics.add.overlap(
