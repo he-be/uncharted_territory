@@ -1,6 +1,7 @@
 import { world, type Entity } from '../world';
 import Phaser from 'phaser';
 import { ITEMS, type ItemId } from '../../data/items';
+import { FontConfig } from '../../ui/FontConfig';
 
 let lastContentUpdate = 0;
 const CONTENT_UPDATE_INTERVAL = 200; // ms
@@ -46,7 +47,8 @@ export const overlaySystem = (scene: Phaser.Scene) => {
   const getOrCreateText = (entity: Entity, color: string, fontSize: string = '28px') => {
     if (!entity.textOverlay) {
       entity.textOverlay = scene.add.text(0, 0, '', {
-        font: `${fontSize} monospace`,
+        fontFamily: FontConfig.family,
+        fontSize: fontSize,
         color: color,
         stroke: '#000000',
         strokeThickness: 3,
@@ -115,7 +117,8 @@ export const overlaySystem = (scene: Phaser.Scene) => {
     if (!station.textOverlay) {
       // Init (Once)
       station.textOverlay = scene.add.text(station.transform.x, station.transform.y + 100, '', {
-        font: '24px monospace',
+        fontFamily: FontConfig.family,
+        fontSize: '24px',
         color: '#cccccc',
         align: 'center',
         stroke: '#000000',
@@ -207,7 +210,8 @@ export const overlaySystem = (scene: Phaser.Scene) => {
 
     if (!encounter.textOverlay) {
       encounter.textOverlay = scene.add.text(zone.center.x, zone.center.y - zone.radius - 20, '', {
-        font: '20px monospace',
+        fontFamily: FontConfig.family,
+        fontSize: '20px',
         color: '#ff0000',
         stroke: '#000000',
         strokeThickness: 3,

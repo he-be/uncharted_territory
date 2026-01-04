@@ -5,6 +5,7 @@ import { CombatModuleManager } from './combat/structure/ModuleManager';
 import { AlvaAgent } from '../combat/AlvaAgent';
 import { DialogueOverlay } from '../ui/DialogueOverlay';
 import { ResultOverlay } from '../ui/ResultOverlay';
+import { TextStyles } from '../ui/FontConfig';
 import type { ModuleConfig } from './combat/structure/CombatStructure';
 
 interface CombatConfig {
@@ -295,19 +296,25 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
   private createUI() {
     this.hpText = this.add
-      .text(10, 10, 'HP: 100', { fontSize: '32px', color: '#00ff00' })
+      .text(10, 10, 'HP: 100', TextStyles.uiHeader)
       .setScrollFactor(0)
       .setDepth(100);
+
+    // Override color for specific HUD element if needed, or use style as base
+    this.hpText.setColor('#00ff00');
+
     this.statusText = this.add
-      .text(10, 50, 'System: Normal', { fontSize: '16px', color: '#ffffff' })
+      .text(10, 50, 'System: Normal', TextStyles.ui)
       .setScrollFactor(0)
       .setDepth(100);
 
     // Battle Stats
     this.battleStatsText = this.add
-      .text(10, 80, '', { fontSize: '14px', color: '#ffff00' })
+      .text(10, 80, '', TextStyles.termSmall)
       .setScrollFactor(0)
       .setDepth(100);
+
+    this.battleStatsText.setColor('#ffff00');
   }
 
   private spawnEntities() {

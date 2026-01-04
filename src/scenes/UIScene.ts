@@ -1,6 +1,6 @@
-import Phaser from 'phaser';
 import { world } from '../ecs/world';
 import { mapSystem } from '../ecs/systems/mapSystem';
+import { TextStyles } from '../ui/FontConfig';
 
 export class UIScene extends Phaser.Scene {
   private debugText!: Phaser.GameObjects.Text;
@@ -11,7 +11,7 @@ export class UIScene extends Phaser.Scene {
 
   create() {
     // Debug Text
-    this.debugText = this.add.text(10, 10, '', { font: '16px monospace', color: '#00ff00' });
+    this.debugText = this.add.text(10, 10, '', TextStyles.term);
 
     // Ensure it sits on top? Scenes are layered by launch order.
     // MainScene launches first, so UI should be on top if launched after or configured properly.

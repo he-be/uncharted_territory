@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { ModuleConfig } from './combat/structure/CombatStructure';
+import { FontConfig } from '../ui/FontConfig';
 
 interface WeaponOption {
   name: string;
@@ -60,8 +61,10 @@ export class CombatMenuScene extends Phaser.Scene {
 
     this.add
       .text(width / 2, height * 0.1, 'SHIP LOADOUT', {
+        fontFamily: FontConfig.familyUI,
         fontSize: '48px',
         color: '#00ff00',
+        fontStyle: 'bold',
       })
       .setOrigin(0.5);
 
@@ -165,10 +168,17 @@ export class CombatMenuScene extends Phaser.Scene {
     getValue: () => string,
     onNext: () => void
   ) {
-    this.add.text(x, y - 25, label, { fontSize: '20px', color: '#aaaaaa' }).setOrigin(0.5);
+    this.add
+      .text(x, y - 25, label, {
+        fontFamily: FontConfig.familyUI,
+        fontSize: '20px',
+        color: '#aaaaaa',
+      })
+      .setOrigin(0.5);
 
     const valueText = this.add
       .text(x, y + 10, `< ${getValue()} >`, {
+        fontFamily: FontConfig.familyUI,
         fontSize: '32px',
         color: '#ffffff',
         backgroundColor: '#333333',
@@ -185,6 +195,7 @@ export class CombatMenuScene extends Phaser.Scene {
   private createButton(x: number, y: number, text: string, onClick: () => void, color = '#ffffff') {
     const textObj = this.add
       .text(x, y, text, {
+        fontFamily: FontConfig.familyUI,
         fontSize: '32px',
         color: color,
         backgroundColor: '#333333',
