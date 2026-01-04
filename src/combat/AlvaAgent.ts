@@ -33,18 +33,17 @@ export class AlvaAgent {
   private categoryCooldowns: Map<string, number> = new Map();
   private readonly MIN_INTERVAL = 3000; // 3s
 
+  private currentPhase: string = 'DEPLOYMENT';
+
   constructor(overlay: DialogueOverlay) {
     this.overlay = overlay;
     this.apiKey = import.meta.env.OPENROUTER_API_KEY || ''; // Exposed via vite.config.ts
 
     this.state = {
       playerHealth: 100,
-      ammo: 100,
       killStreak: 0,
-      deathStreak: 0,
       battleDuration: 0,
       enemiesNearby: 0,
-      bossActive: false,
       momentum: 0,
       nearestEnemyDist: 99999,
       closingSpeed: 0,
@@ -60,6 +59,30 @@ export class AlvaAgent {
 
   public updateState(partialState: Partial<GameState>) {
     this.state = { ...this.state, ...partialState };
+    this.checkPhaseChange();
+  }
+
+  private checkPhaseChange() {
+    let newPhase = 'UNKNOWN';
+    // Phase Logic
+    if (this.state.battleDuration < 10) {
+      newPhase = 'DEPLOYMENT';
+    } else if (this.state.nearestEnemyDist > 2000) {
+      newPhase = 'APPROACH';
+    } else if (this.state.nearestEnemyDist > 800) {
+      newPhase = 'SKIRMISH';
+    } else {
+      newPhase = 'MELEE';
+    }
+
+    if (newPhase !== this.currentPhase) {
+      this.currentPhase = newPhase;
+      this.reportEvent({
+        type: 'phase_change',
+        value: newPhase,
+        description: `Phase changed to ${newPhase}`,
+      });
+    }
   }
 
   public reportEvent(event: TriggerEvent) {
@@ -72,7 +95,9 @@ export class AlvaAgent {
     if (now - this.lastCommentaryTime < this.MIN_INTERVAL) return;
 
     const categoryLastTime = this.categoryCooldowns.get(event.type) || 0;
-    if (now - categoryLastTime < 10000) return; // 10s category cooldown
+    // 10s cooldown for most, but phase_change should probably trigger immediately if possible?
+    // Let's keep 10s global for now.
+    if (now - categoryLastTime < 10000) return;
 
     // Trigger commentary
     this.generateCommentary(event);
@@ -119,23 +144,11 @@ export class AlvaAgent {
   }
 
   private constructPrompt(trigger: TriggerEvent): string {
-    // Determine Phase
-    let phase = 'UNKNOWN';
-    if (this.state.battleDuration < 10) {
-      phase = 'DEPLOYMENT (Start)';
-    } else if (this.state.nearestEnemyDist > 2000) {
-      phase = 'APPROACH (Moving to frontline)';
-    } else if (this.state.nearestEnemyDist > 800) {
-      phase = 'SKIRMISH (Long range)';
-    } else {
-      phase = 'MELEE (Close combat)';
-    }
-
     const contextJson = JSON.stringify(
       {
         trigger_type: trigger.type,
         trigger_value: trigger.value,
-        phase: phase,
+        phase: this.currentPhase,
         tactical: {
           distance_to_enemy: Math.round(this.state.nearestEnemyDist),
           closing_speed: Math.round(this.state.closingSpeed),
@@ -144,12 +157,10 @@ export class AlvaAgent {
         },
         player_state: {
           health: this.state.playerHealth,
-          ammo: this.state.ammo,
         },
         battle_state: {
           duration: Math.round(this.state.battleDuration),
           enemies_nearby: this.state.enemiesNearby,
-          boss: this.state.bossActive,
           momentum: this.state.momentum,
         },
         recent_events: this.history.slice(-5),

@@ -425,10 +425,6 @@ export class CombatPrototypeScene extends Phaser.Scene {
         battleDuration: time / 1000,
         enemiesNearby: this.enemies.countActive(),
         playerHealth: this.player.getData('hp'),
-        ammo: 100, // Placeholder
-        bossActive: this.enemies
-          .getChildren()
-          .some((e) => e.active && e.getData('type') === 'mother'),
         nearestEnemyDist: nearestDist,
         closingSpeed: closingSpeed,
         timeToContact: timeToContact,
