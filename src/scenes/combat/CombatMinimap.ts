@@ -57,6 +57,7 @@ export class CombatMinimap {
     }
 
     this.minimapGroup.add(graphics);
+    this.scene.cameras.main.ignore(graphics); // IMPORTANT: Ignore explicitly for dynamic additions
     entity.setData('minimapSymbol', graphics);
 
     entity.on('destroy', () => {

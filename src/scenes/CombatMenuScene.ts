@@ -1,9 +1,49 @@
 import Phaser from 'phaser';
+import type { ModuleConfig } from './combat/structure/CombatStructure';
+
+interface WeaponOption {
+  name: string;
+  id: string;
+  type: 'weapon';
+  cooldown: number;
+}
+interface DefenseOption {
+  name: string;
+  id: string;
+  type: 'none' | 'pd';
+  range?: number;
+  cooldown?: number;
+}
+interface SupportOption {
+  name: string;
+  id: string;
+  type: 'none' | 'drone_bay';
+  count?: number;
+}
 
 export class CombatMenuScene extends Phaser.Scene {
-  private playerDrones: number = 20;
-  private enemyDrones: number = 20;
-  private enemyCount: number = 1;
+  // Loadout State
+  private primaryWeaponIdx = 0;
+  private defenseIdx = 0;
+  private supportIdx = 0;
+
+  private primaryOptions: WeaponOption[] = [
+    { name: 'Standard Laser', id: 'laser_mk1', type: 'weapon', cooldown: 100 },
+    { name: 'Rapid Pulse', id: 'laser_rapid', type: 'weapon', cooldown: 20 },
+    { name: 'Heavy Beam', id: 'laser_heavy', type: 'weapon', cooldown: 200 },
+  ];
+
+  private defenseOptions: DefenseOption[] = [
+    { name: 'None', id: 'none', type: 'none' },
+    { name: 'Point Defense (Basic)', id: 'pd_basic', type: 'pd', range: 500, cooldown: 20 },
+    { name: 'Point Defense (Adv)', id: 'pd_adv', type: 'pd', range: 600, cooldown: 10 },
+  ];
+
+  private supportOptions: SupportOption[] = [
+    { name: 'None', id: 'none', type: 'none' },
+    { name: 'Drone Bay (25)', id: 'drone_bay_25', type: 'drone_bay', count: 25 },
+    { name: 'Drone Bay (50)', id: 'drone_bay_50', type: 'drone_bay', count: 50 },
+  ];
 
   constructor() {
     super({ key: 'CombatMenuScene' });
@@ -12,55 +52,143 @@ export class CombatMenuScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
 
+    // Force hide HTML UI layer defined in index.html
+    const uiLayer = document.getElementById('ui-layer');
+    if (uiLayer) {
+      uiLayer.style.display = 'none';
+    }
+
     this.add
-      .text(width / 2, height * 0.2, 'DRONE WARFARE PROTOTYPE', {
+      .text(width / 2, height * 0.1, 'SHIP LOADOUT', {
         fontSize: '48px',
         color: '#00ff00',
       })
       .setOrigin(0.5);
 
-    this.add
-      .text(width / 2, height * 0.3, 'Arrow Keys: Move/Rotate | Space: Fire | Z/X: Zoom', {
-        fontSize: '24px',
-        color: '#aaaaaa',
-      })
-      .setOrigin(0.5);
+    // Primary Weapon Selector
+    this.createSelector(
+      width / 2,
+      height * 0.3,
+      'Primary Weapon',
+      () => this.primaryOptions[this.primaryWeaponIdx].name,
+      () => {
+        this.primaryWeaponIdx = (this.primaryWeaponIdx + 1) % this.primaryOptions.length;
+        this.scene.restart();
+      }
+    );
 
-    // Config Buttons (Simplified for prototype)
-    this.createButton(width / 2, height * 0.5, `Player Drones: ${this.playerDrones}`, () => {
-      this.playerDrones = (this.playerDrones + 10) % 60;
-      if (this.playerDrones === 0) this.playerDrones = 10;
-      this.scene.restart(); // Hacky redraw
-    });
+    // Defense Selector
+    this.createSelector(
+      width / 2,
+      height * 0.45,
+      'Defense System',
+      () => this.defenseOptions[this.defenseIdx].name,
+      () => {
+        this.defenseIdx = (this.defenseIdx + 1) % this.defenseOptions.length;
+        this.scene.restart();
+      }
+    );
 
-    this.createButton(width / 2, height * 0.6, `Enemy Drones: ${this.enemyDrones}`, () => {
-      this.enemyDrones = (this.enemyDrones + 10) % 60;
-      if (this.enemyDrones === 0) this.enemyDrones = 10;
-      this.scene.restart();
-    });
+    // Support Selector
+    this.createSelector(
+      width / 2,
+      height * 0.6,
+      'Support Module',
+      () => this.supportOptions[this.supportIdx].name,
+      () => {
+        this.supportIdx = (this.supportIdx + 1) % this.supportOptions.length;
+        this.scene.restart();
+      }
+    );
 
+    // Start Button
     this.createButton(
       width / 2,
-      height * 0.8,
-      'START BATTLE',
+      height * 0.85,
+      'ENGAGE SYSTEMS',
       () => {
+        const modules: ModuleConfig[] = this.buildLoadout();
         this.scene.start('CombatPrototypeScene', {
-          playerDrones: this.playerDrones,
-          enemyDrones: this.enemyDrones,
-          enemyCount: this.enemyCount,
+          playerModules: modules,
+          enemyDrones: 20, // Keep simple for enemy for now, or randomize later
+          enemyCount: 1,
         });
       },
       '#ff0000'
     );
   }
 
-  createButton(x: number, y: number, text: string, onClick: () => void, color = '#ffffff') {
+  private buildLoadout(): ModuleConfig[] {
+    const modules: ModuleConfig[] = [];
+
+    // Weapon
+    const wpn = this.primaryOptions[this.primaryWeaponIdx];
+    modules.push({
+      id: wpn.id,
+      type: 'weapon',
+      slot: 'front',
+      offset: { x: 0, y: 0 },
+      params: { cooldown: wpn.cooldown },
+    });
+
+    // Defense
+    const def = this.defenseOptions[this.defenseIdx];
+    if (def.type !== 'none') {
+      // Equip 2 PDs for coverage? Or just 1? Let's say 1 for now.
+      modules.push({
+        id: def.id,
+        type: 'pd',
+        slot: 'turret',
+        offset: { x: 0, y: 0 },
+        params: { range: def.range, cooldown: def.cooldown },
+      });
+    }
+
+    // Support
+    const sup = this.supportOptions[this.supportIdx];
+    if (sup.type !== 'none') {
+      modules.push({
+        id: sup.id,
+        type: 'drone_bay',
+        slot: 'internal',
+        params: { count: sup.count },
+      });
+    }
+
+    return modules;
+  }
+
+  private createSelector(
+    x: number,
+    y: number,
+    label: string,
+    getValue: () => string,
+    onNext: () => void
+  ) {
+    this.add.text(x, y - 25, label, { fontSize: '20px', color: '#aaaaaa' }).setOrigin(0.5);
+
+    const valueText = this.add
+      .text(x, y + 10, `< ${getValue()} >`, {
+        fontSize: '32px',
+        color: '#ffffff',
+        backgroundColor: '#333333',
+        padding: { x: 10, y: 5 },
+      })
+      .setInteractive()
+      .setOrigin(0.5);
+
+    valueText.on('pointerdown', onNext);
+    valueText.on('pointerover', () => valueText.setStyle({ fill: '#ffff00' }));
+    valueText.on('pointerout', () => valueText.setStyle({ fill: '#ffffff' }));
+  }
+
+  private createButton(x: number, y: number, text: string, onClick: () => void, color = '#ffffff') {
     const textObj = this.add
       .text(x, y, text, {
         fontSize: '32px',
         color: color,
         backgroundColor: '#333333',
-        padding: { x: 10, y: 5 },
+        padding: { x: 20, y: 10 },
       })
       .setInteractive()
       .setOrigin(0.5);

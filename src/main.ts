@@ -31,4 +31,9 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 };
 
+console.log('[Main] Starting Game...');
+// Force hide UI layer immediately
+const uiLayer = document.getElementById('ui-layer');
+if (uiLayer) uiLayer.style.display = 'none';
+
 new Phaser.Game(config);
