@@ -141,27 +141,32 @@ button:hover {
   width: 80%;
   max-width: 800px;
   height: 200px;
-  background: rgba(0, 20, 40, 0.85); /* Slightly blueish dark */
+  background: rgba(0, 20, 40, 0.85);
+  /* Slightly blueish dark */
   border: 1px solid #0ff;
   color: #fff;
-  overflow-y: auto; /* Scrollbar appears as needed */
+  overflow-y: auto;
+  /* Scrollbar appears as needed */
   padding: 10px;
   pointer-events: auto;
   font-family: 'Courier New', monospace;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
   z-index: 1000;
   display: flex;
-  flex-direction: column; /* Start from top */
+  flex-direction: column;
+  /* Start from top */
 }
 
 /* Scrollbar styling */
 #alva-dialogue-container::-webkit-scrollbar {
   width: 10px;
 }
+
 #alva-dialogue-container::-webkit-scrollbar-track {
   background: #000;
   border-left: 1px solid #333;
 }
+
 #alva-dialogue-container::-webkit-scrollbar-thumb {
   background: #0ff;
   border-radius: 2px;
@@ -180,8 +185,63 @@ button:hover {
     opacity: 0;
     transform: translateX(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* Result Overlay */
+#result-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.result-content {
+  text-align: center;
+  border: 2px solid #00ff00;
+  padding: 40px;
+  background: rgba(0, 50, 0, 0.8);
+  box-shadow: 0 0 20px #00ff00;
+  border-radius: 10px;
+}
+
+.result-content h1 {
+  font-size: 3rem;
+  color: #00ff00;
+  margin-bottom: 20px;
+  text-shadow: 0 0 10px #00ff00;
+}
+
+.result-content .stats {
+  font-size: 1.5rem;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+#btn-return {
+  padding: 15px 30px;
+  font-size: 1.2rem;
+  background: #004400;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+#btn-return:hover {
+  background: #00ff00;
+  color: #000;
+  box-shadow: 0 0 15px #00ff00;
 }

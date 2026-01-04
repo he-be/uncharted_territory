@@ -441,6 +441,10 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // --- Victory Check ---
     // Make sure init is done (check simple flag or time > 1s to avoid instant win on load)
+    if (time % 1000 < 20) {
+      console.log(`[CombatPrototypeScene] Active Enemies: ${this.enemies.countActive()}`);
+    }
+
     if (time > 1000 && this.enemies.countActive() === 0 && !this.victoryTriggered) {
       this.victoryTriggered = true;
 
@@ -656,6 +660,18 @@ export class CombatPrototypeScene extends Phaser.Scene {
           value: 1,
           description: isMother ? 'Boss Eliminated' : 'Enemy Eliminated',
         });
+
+        if (isMother) {
+          // Chain Reaction: Destroy all remaining enemy units (Drones lost signal)
+          this.enemies.getChildren().forEach((child) => {
+            if (child.active && child !== entity) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const c = child as any;
+              c.destroy();
+              this.enemiesKilledCount++;
+            }
+          });
+        }
       }
       // If entity has modules, module manager will auto-cleanup via 'destroy' event on entity
       // But we should verify.

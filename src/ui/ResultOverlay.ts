@@ -9,6 +9,7 @@ export class ResultOverlay {
   }
 
   public show(stats: { time: number; enemiesDefeated: number }, onReturn: () => void) {
+    console.log('[ResultOverlay] Showing Result Screen', stats);
     this.container.innerHTML = `
             <div class="result-content">
                 <h1>MISSION ACCOMPLISHED</h1>
