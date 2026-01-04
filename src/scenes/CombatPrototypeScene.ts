@@ -19,6 +19,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
   private enemies!: Phaser.Physics.Arcade.Group;
   private friendlies!: Phaser.Physics.Arcade.Group;
   private lasers!: Phaser.Physics.Arcade.Group;
+  private minimapGroup!: Phaser.GameObjects.Group;
 
   private config: CombatConfig = { playerDrones: 5, enemyDrones: 5, enemyCount: 1 };
 
@@ -67,6 +68,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
       runChildUpdate: true,
     });
 
+    // Minimap Symbol Group
+    this.minimapGroup = this.add.group();
+
     // 3. Create Player (Immediately init Data)
     this.player = this.physics.add.image(2000, 3500, 'player_ship');
     this.player.setScale(this.SCALE_SHIP);
@@ -86,6 +90,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player);
 
+    // Add Player Symbol
+    this.createMinimapSymbol(this.player, 'player');
+
     // 4. Setup Input
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
@@ -102,11 +109,21 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // 6. Setup Collisions (Robust Handler)
     this.physics.add.overlap(this.lasers, this.enemies, this.handleLaserHit, this.checkOwner, this);
     this.physics.add.overlap(this.lasers, this.player, this.handleLaserHit, this.checkOwner, this);
-    // Note: Friendly Fire disabled for now
+    this.physics.add.overlap(
+      this.lasers,
+      this.friendlies,
+      this.handleLaserHit,
+      this.checkOwner,
+      this
+    );
 
     // 7. UI & Minimap
     this.createUI();
     this.createMinimap();
+
+    // 8. Camera Masking
+    // Main Camera: Ignore Symbols
+    this.cameras.main.ignore(this.minimapGroup);
   }
 
   private createUI() {
@@ -121,22 +138,65 @@ export class CombatPrototypeScene extends Phaser.Scene {
   }
 
   private createMinimap() {
-    const size = 320; // Increased by 60% (from 200)
+    const size = 320;
     const margin = 20;
     const x = this.scale.width - size - margin;
     const y = this.scale.height - size - margin;
 
-    // Zoom 0.08 covers 320/0.08 = 4000 world units (Perfect fit)
     const minimap = this.cameras.add(x, y, size, size).setZoom(0.08).setName('minimap');
     minimap.setBackgroundColor(0x000000);
-    minimap.scrollX = 2000; // Center of world
+    minimap.scrollX = 2000;
     minimap.scrollY = 2000;
-    minimap.ignore([this.hpText, this.statusText]);
 
-    // Add a border for the minimap
+    // Minimap Ignores: UI and REAL Sprites
+    // Note: Groups create children later, so we must ignore individual objects upon creation or update.
+    // For now, ignore static UI.
+    minimap.ignore([this.hpText, this.statusText]);
+    // Also ignore Player immediately
+    minimap.ignore(this.player);
+
+    // Border
     const graphics = this.add.graphics().setScrollFactor(0).setDepth(101);
     graphics.lineStyle(2, 0x00ff00);
     graphics.strokeRect(x, y, size, size);
+  }
+
+  private createMinimapSymbol(
+    entity: Phaser.GameObjects.GameObject,
+    type: 'player' | 'ally' | 'mother' | 'enemy'
+  ) {
+    const graphics = this.add.graphics();
+
+    // Shape & Color Logic
+    // Sizes are LARGE (World Space) because Zoom is 0.08.
+    // 100px -> 8px on minimap.
+
+    if (type === 'player') {
+      graphics.fillStyle(0x00ffff, 1); // Cyan
+      // Triangle pointing up (relative to rotation 0, which is Right)
+      // Phaser Rotation 0 = Right. We want a generic pointer.
+      // Let's draw a simple arrow head pointing Right (0 deg).
+      graphics.fillTriangle(60, 0, -40, -40, -40, 40);
+    } else if (type === 'ally') {
+      graphics.fillStyle(0x00ffff, 0.8);
+      graphics.fillCircle(0, 0, 40); // 80px diameter -> 6.4px dot
+    } else if (type === 'mother') {
+      graphics.fillStyle(0xff0000, 1); // Red
+      graphics.fillRect(-100, -100, 200, 200); // 200px square -> 16px box
+    } else if (type === 'enemy') {
+      graphics.fillStyle(0xff0000, 0.8);
+      graphics.fillCircle(0, 0, 40);
+    }
+
+    this.minimapGroup.add(graphics);
+
+    // Sync Logic: Store reference on entity
+    entity.setData('minimapSymbol', graphics);
+
+    // Auto-Destroy Logic
+    entity.on('destroy', () => {
+      graphics.destroy();
+    });
   }
 
   private spawnEntities() {
@@ -159,6 +219,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // Fix: Start facing DOWN
     mother.setRotation(Math.PI / 2);
+
+    this.createMinimapSymbol(mother, 'mother');
+    this.cameras.getCamera('minimap')?.ignore(mother);
 
     // Enemy Drones
     for (let i = 0; i < this.config.enemyDrones; i++) {
@@ -190,6 +253,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
     drone.setData('hp', 30);
     drone.setData('target', null);
     drone.setData('lastFired', 0);
+
+    this.createMinimapSymbol(drone, isFriendly ? 'ally' : 'enemy');
+    this.cameras.getCamera('minimap')?.ignore(drone);
   }
 
   update(time: number) {
@@ -204,6 +270,21 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // LEFT key -> Rotate Counter-Clockwise. OK.
     // RIGHT key -> Rotate Clockwise. OK.
     // So existing control logic is actually fine as long as initial state is correct.
+
+    // SYNC MINIMAP SYMBOLS
+    [this.player, ...this.enemies.getChildren(), ...this.friendlies.getChildren()].forEach(
+      (e: Phaser.GameObjects.GameObject) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const entity = e as any;
+        if (entity.active) {
+          const symbol = entity.getData('minimapSymbol') as Phaser.GameObjects.Graphics;
+          if (symbol) {
+            symbol.setPosition(entity.x, entity.y);
+            symbol.setRotation(entity.rotation);
+          }
+        }
+      }
+    );
 
     if (!this.player.active) {
       this.statusText.setText('System: CRITICAL FAILURE (Player Destroyed)');
@@ -396,6 +477,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // Metadata for owner check
     laser.setData('owner', source);
 
+    // Hide laser from minimap
+    this.cameras.getCamera('minimap')?.ignore(laser);
+
     // Velocity
     this.physics.velocityFromRotation(source.rotation, this.SPEED_LASER, laser.body.velocity);
     // Add source velocity for momentum conservation? Optional. Let's keep it simple for now.
@@ -432,12 +516,11 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // 1. Self Collision Check
     if (owner === target) return false;
 
-    // 2. Friendly Fire Check (Optional)
-    // If owner is Friendly and Target is Friendly/Player -> False
-    // Leaving explicitly disabled for simplicity in this prototype phase
-    // ...
+    // 2. Team Logic (No Friendly Fire)
+    const isOwnerPlayerSide = owner === this.player || this.friendlies.contains(owner);
+    const isTargetPlayerSide = target === this.player || this.friendlies.contains(target);
 
-    return true;
+    return isOwnerPlayerSide !== isTargetPlayerSide;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
