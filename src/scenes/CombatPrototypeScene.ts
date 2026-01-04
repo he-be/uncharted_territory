@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { CombatAI } from './combat/CombatAI';
 import { CombatMinimap } from './combat/CombatMinimap';
 import { CombatModuleManager } from './combat/structure/ModuleManager';
+import { AlvaAgent } from '../combat/AlvaAgent';
+import { DialogueOverlay } from '../ui/DialogueOverlay';
 import type { ModuleConfig } from './combat/structure/CombatStructure';
 
 interface CombatConfig {
@@ -45,6 +47,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
   private aiSystem!: CombatAI;
   private moduleManager!: CombatModuleManager; // New Manager
   private minimapSystem!: CombatMinimap;
+  private alvaAgent!: AlvaAgent;
 
   // Default config if not passed
   private config: CombatConfig = {
@@ -268,6 +271,8 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // 8. UI & Minimap
     this.createUI();
+    const overlay = new DialogueOverlay();
+    this.alvaAgent = new AlvaAgent(overlay);
     this.minimapSystem.create([
       this.hpText,
       this.statusText,
@@ -354,6 +359,20 @@ export class CombatPrototypeScene extends Phaser.Scene {
     if (!this.player.active) {
       this.statusText.setText('System: CRITICAL FAILURE (Player Destroyed)');
       return;
+    }
+
+    // Update ALVA State
+    if (this.alvaAgent) {
+      this.alvaAgent.updateState({
+        battleDuration: time / 1000,
+        enemiesNearby: this.enemies.countActive(),
+        playerHealth: this.player.getData('hp'),
+        playerShield: 100, // Placeholder
+        ammo: 100, // Placeholder
+        bossActive: this.enemies
+          .getChildren()
+          .some((e) => e.active && e.getData('type') === 'mother'),
+      });
     }
 
     // --- Player Controls ---
@@ -523,9 +542,25 @@ export class CombatPrototypeScene extends Phaser.Scene {
     if (entity === this.player) {
       this.hpText.setText(`HP: ${Math.max(0, hp)}`);
       this.cameras.main.shake(100, 0.005);
+      this.alvaAgent.reportEvent({
+        type: 'damage_taken',
+        value: amount,
+        description: 'Player took damage',
+      });
     }
 
     if (hp <= 0) {
+      // Report Kill/Death
+      if (entity === this.player) {
+        this.alvaAgent.reportEvent({ type: 'player_death', value: 0, description: 'Player died' });
+      } else if (entity.getData('faction') === 'enemy') {
+        const isMother = entity.getData('type') === 'mother';
+        this.alvaAgent.reportEvent({
+          type: 'enemy_killed',
+          value: 1,
+          description: isMother ? 'Boss Eliminated' : 'Enemy Eliminated',
+        });
+      }
       // If entity has modules, module manager will auto-cleanup via 'destroy' event on entity
       // But we should verify.
       entity.destroy();

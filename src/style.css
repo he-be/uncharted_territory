@@ -132,3 +132,56 @@ button:hover {
   max-height: 80vh;
   overflow-y: auto;
 }
+
+#alva-dialogue-container {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  max-width: 800px;
+  height: 200px;
+  background: rgba(0, 20, 40, 0.85); /* Slightly blueish dark */
+  border: 1px solid #0ff;
+  color: #fff;
+  overflow-y: auto; /* Scrollbar appears as needed */
+  padding: 10px;
+  pointer-events: auto;
+  font-family: 'Courier New', monospace;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column; /* Start from top */
+}
+
+/* Scrollbar styling */
+#alva-dialogue-container::-webkit-scrollbar {
+  width: 10px;
+}
+#alva-dialogue-container::-webkit-scrollbar-track {
+  background: #000;
+  border-left: 1px solid #333;
+}
+#alva-dialogue-container::-webkit-scrollbar-thumb {
+  background: #0ff;
+  border-radius: 2px;
+}
+
+.alva-message {
+  margin-bottom: 8px;
+  padding: 5px 10px;
+  border-left: 2px solid #0ff;
+  background: rgba(0, 255, 255, 0.05);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
