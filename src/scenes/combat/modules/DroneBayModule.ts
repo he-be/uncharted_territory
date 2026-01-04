@@ -16,10 +16,10 @@ export class DroneBayModule extends CombatModule {
     droneGroup: Phaser.Physics.Arcade.Group
   ) {
     super(scene, parent, config);
-    this.maxDrones = (config.params?.count as number) || 5;
+    this.maxDrones = (config.params?.count as number) || 50;
     this.droneCount = 0; // Currently active from this bay
     this.droneGroup = droneGroup;
-    this.spawnInterval = 500; // 2 sec per drone launch
+    this.spawnInterval = 200; // 2 sec per drone launch
   }
 
   update(time: number, _delta: number) {
@@ -54,14 +54,14 @@ export class DroneBayModule extends CombatModule {
     const isFriendly = faction === 'player'; // or 'ally'
 
     const drone = this.droneGroup.create(x, y, 'npc_fighter');
-    drone.setScale(0.03);
+    drone.setScale(0.02);
     drone.setDepth(5);
     drone.setTint(isFriendly ? 0x00ff00 : 0xff0000);
     drone.setDrag(50);
     drone.setMaxVelocity(150);
 
     drone.setData('name', isFriendly ? 'Ally Drone' : 'Enemy Drone');
-    drone.setData('hp', 30);
+    drone.setData('hp', 150);
     drone.setData('target', null);
     drone.setData('lastFired', 0);
     drone.setData('type', 'drone');
