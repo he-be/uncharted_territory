@@ -20,11 +20,26 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
   private hpText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+  private battleStatsText!: Phaser.GameObjects.Text;
 
   private enemies!: Phaser.Physics.Arcade.Group;
+  // ... (skip unchanged lines explicitly? No, allow_multiple usage or big chunk replacement)
+  // I will use two chunks. One for property fix, one for logic.
+  // Property Fix:
+  //   private hpText!: Phaser.GameObjects.Text;
+  //   private hpText!: Phaser.GameObjects.Text; // Remove this
+  //   private statusText!: ...
+
+  // Logic Fix in spawnEntities:
+  //   Calcluate player drones using this.config.playerModules.
+  //   Update params count.
+
+  // Actually, replace_file_content is single block unless I use multi_replace.
+  // I will use multi_replace to handle both efficiently.
   private friendlies!: Phaser.Physics.Arcade.Group;
   private lasers!: Phaser.Physics.Arcade.Group;
   private pdProjectiles!: Phaser.Physics.Arcade.Group;
+  private bg!: Phaser.GameObjects.TileSprite;
 
   // Modules
   private aiSystem!: CombatAI;
@@ -111,8 +126,13 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // Actually, I will split this into two tool calls.
     // 1. Texture Generation in create()
     // 2. Collision Logic at bottom.
-    this.physics.world.setBounds(0, 0, 4000, 4000);
-    this.add.tileSprite(0, 0, 4000, 4000, 'bg_stars').setOrigin(0).setAlpha(0.2);
+    // 1. Setup World
+    this.physics.world.setBounds(0, 0, 20000, 20000);
+    this.bg = this.add
+      .tileSprite(0, 0, this.scale.width, this.scale.height, 'bg_stars')
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setAlpha(0.2);
 
     // 2. Setup Groups
     this.enemies = this.physics.add.group({ enable: true, runChildUpdate: true });
@@ -142,7 +162,8 @@ export class CombatPrototypeScene extends Phaser.Scene {
     );
 
     // 4. Create Player
-    this.player = this.physics.add.image(2000, 3500, 'player_ship');
+    // 4. Create Player
+    this.player = this.physics.add.image(10000, 18000, 'player_ship');
     this.player.setScale(this.SCALE_SHIP);
     this.player.setDepth(10);
     this.player.setDrag(100);
@@ -177,7 +198,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
       this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     }
 
-    // 6. Spawn Enemies
+    // 6. Spawn Entities
     this.spawnEntities();
 
     // Listener for Drone Bay spawns
@@ -247,11 +268,13 @@ export class CombatPrototypeScene extends Phaser.Scene {
     this.minimapSystem.create([
       this.hpText,
       this.statusText,
+      this.battleStatsText,
       this.player,
       this.enemies,
       this.friendlies,
       this.lasers,
       this.pdProjectiles,
+      this.bg,
     ]);
   }
 
@@ -264,12 +287,18 @@ export class CombatPrototypeScene extends Phaser.Scene {
       .text(10, 50, 'System: Normal', { fontSize: '16px', color: '#ffffff' })
       .setScrollFactor(0)
       .setDepth(100);
+
+    // Battle Stats
+    this.battleStatsText = this.add
+      .text(10, 80, '', { fontSize: '14px', color: '#ffff00' })
+      .setScrollFactor(0)
+      .setDepth(100);
   }
 
   private spawnEntities() {
-    // Enemy Mothership
-    const mx = 2000 + (Math.random() - 0.5) * 500;
-    const my = 1000 + (Math.random() - 0.5) * 500;
+    // Enemy Mothership (Top of Map)
+    const mx = 10000 + (Math.random() - 0.5) * 2500;
+    const my = 2000 + (Math.random() - 0.5) * 500;
     const mother = this.enemies.create(mx, my, 'npc_pirate');
     mother.setScale(this.SCALE_SHIP);
     mother.setTint(0xff0000);
@@ -288,6 +317,19 @@ export class CombatPrototypeScene extends Phaser.Scene {
     this.minimapSystem.createSymbol(mother, 'mother');
     this.cameras.getCamera('minimap')?.ignore(mother);
 
+    // Calculate Player Drone Count
+    let playerDroneCount = 0;
+    this.config.playerModules.forEach((m) => {
+      if (m.type === 'drone_bay' && m.params?.count) {
+        playerDroneCount += m.params.count as number;
+      }
+    });
+
+    // Match Enemy Drones (At least 20, or match player if higher)
+    // User complaint: "Always 20, make it variable".
+    // Let's set it to exactly player count, with a min of 10 for challenge.
+    const enemyDroneCount = Math.max(10, playerDroneCount);
+
     // Install Mother Modules (Standard Loadout)
     this.moduleManager.installModules(mother, {
       type: 'mother',
@@ -299,7 +341,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
           id: 'drone_bay_enemy',
           type: 'drone_bay',
           slot: 'internal',
-          params: { count: this.config.enemyDrones },
+          params: { count: enemyDroneCount },
         },
       ],
     });
@@ -364,11 +406,43 @@ export class CombatPrototypeScene extends Phaser.Scene {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const laser = l as any;
       if (laser.active) {
-        if (laser.x < 0 || laser.x > 4000 || laser.y < 0 || laser.y > 4000) {
+        if (laser.x < 0 || laser.x > 20000 || laser.y < 0 || laser.y > 20000) {
           laser.destroy();
         }
       }
     });
+
+    // Sync Background
+    if (this.bg) {
+      this.bg.tilePositionX = this.cameras.main.scrollX;
+      this.bg.tilePositionY = this.cameras.main.scrollY;
+    }
+
+    // Update Battle Stats
+    const friendlyCount = this.friendlies.countActive();
+    const enemyCount = this.enemies.countActive();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const friendlyDrones = this.friendlies
+      .getChildren()
+      .filter((e: any) => e.active && e.getData('type') === 'drone').length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const enemyDrones = this.enemies
+      .getChildren()
+      .filter((e: any) => e.active && e.getData('type') === 'drone').length;
+
+    this.battleStatsText.setText(
+      `Allies: ${friendlyCount} (Drones: ${friendlyDrones})\n` +
+        `Enemies: ${enemyCount} (Drones: ${enemyDrones})`
+    );
+
+    // Force Ignore for Minimap (Safeguard against persistence issues)
+    const minicam = this.cameras.getCamera('minimap');
+    if (minicam) {
+      if (this.bg) minicam.ignore(this.bg);
+      if (this.battleStatsText) minicam.ignore(this.battleStatsText);
+      if (this.hpText) minicam.ignore(this.hpText);
+      if (this.statusText) minicam.ignore(this.statusText);
+    }
   }
 
   // --- Collision Callbacks ---
