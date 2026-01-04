@@ -60,7 +60,8 @@ export class CombatPrototypeScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, 4000, 4000);
     this.add.tileSprite(0, 0, 4000, 4000, 'bg_stars').setOrigin(0).setAlpha(0.2);
 
-    // Debug UI
+    // Debug UI - DISABLED FOR STABILITY CHECK
+    /*
     this.debugText = this.add
       .text(10, 80, 'FPS: 00 | MS: 00', {
         fontSize: '16px',
@@ -73,14 +74,17 @@ export class CombatPrototypeScene extends Phaser.Scene {
       delay: 1000,
       loop: true,
       callback: () => {
-        this.debugText.setText(
-          `FPS: ${this.game.loop.actualFps.toFixed(1)} | MS: ${this.game.loop.delta.toFixed(1)}`
-        );
-        if (this.game.loop.actualFps < 50) {
-          console.warn(`[Performance] Low FPS: ${this.game.loop.actualFps}`);
+        if (this.game && this.game.loop) {
+             this.debugText.setText(
+               `FPS: ${this.game.loop.actualFps.toFixed(1)} | MS: ${this.game.loop.delta.toFixed(1)}`
+             );
+             if (this.game.loop.actualFps < 50) {
+               console.warn(`[Performance] Low FPS: ${this.game.loop.actualFps}`);
+             }
         }
       },
     });
+    */
 
     // 2. Setup Groups
     this.enemies = this.physics.add.group({ enable: true, runChildUpdate: true });
