@@ -81,6 +81,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
     this.player.setData('hp', 100);
     this.player.setData('maxHp', 100);
 
+    // Fix: Start facing UP
+    this.player.setRotation(-Math.PI / 2);
+
     this.cameras.main.startFollow(this.player);
 
     // 4. Setup Input
@@ -101,7 +104,12 @@ export class CombatPrototypeScene extends Phaser.Scene {
     this.physics.add.overlap(this.lasers, this.player, this.handleLaserHit, this.checkOwner, this);
     // Note: Friendly Fire disabled for now
 
-    // 7. UI
+    // 7. UI & Minimap
+    this.createUI();
+    this.createMinimap();
+  }
+
+  private createUI() {
     this.hpText = this.add
       .text(10, 10, 'HP: 100', { fontSize: '32px', color: '#00ff00' })
       .setScrollFactor(0)
@@ -112,6 +120,24 @@ export class CombatPrototypeScene extends Phaser.Scene {
       .setDepth(100);
   }
 
+  private createMinimap() {
+    const size = 200;
+    const margin = 20;
+    const x = this.scale.width - size - margin;
+    const y = this.scale.height - size - margin;
+
+    const minimap = this.cameras.add(x, y, size, size).setZoom(0.05).setName('minimap');
+    minimap.setBackgroundColor(0x000000);
+    minimap.scrollX = 2000; // Center of world
+    minimap.scrollY = 2000;
+    minimap.ignore([this.hpText, this.statusText]);
+
+    // Add a border for the minimap
+    const graphics = this.add.graphics().setScrollFactor(0).setDepth(101);
+    graphics.lineStyle(2, 0x00ff00);
+    graphics.strokeRect(x, y, size, size);
+  }
+
   private spawnEntities() {
     // Enemy Mothership
     const mx = 2000 + (Math.random() - 0.5) * 500;
@@ -120,11 +146,18 @@ export class CombatPrototypeScene extends Phaser.Scene {
     mother.setScale(this.SCALE_SHIP);
     mother.setTint(0xff0000);
     mother.setDepth(5);
-    mother.body.setImmovable(true); // Treat as heavy/stationary
+    // Boss: Reduced Drag, allow movement but slow
+    mother.setDrag(200);
+    mother.setAngularDrag(100);
+    mother.setMaxVelocity(30); // Very slow boss movement
+
     mother.setData('type', 'mother');
     mother.setData('name', 'Enemy Mothership');
     mother.setData('hp', 1000);
     mother.setData('maxHp', 1000);
+
+    // Fix: Start facing DOWN
+    mother.setRotation(Math.PI / 2);
 
     // Enemy Drones
     for (let i = 0; i < this.config.enemyDrones; i++) {
@@ -159,6 +192,18 @@ export class CombatPrototypeScene extends Phaser.Scene {
   }
 
   update(time: number) {
+    // ... (Controls logic needs slight adjustment for UP-facing default?)
+    // Phaser velocityFromRotation uses the object's rotation.
+    // If we rotate the sprite, 'up' key adding acceleration in 'rotation' direction works if 'rotation' is correct.
+    // HOWEVER, standard Phaser sprites face Right (0).
+    // If we just set rotation to -90, 'VelocityFromRotation' will apply force UP.
+    // So controls logic:
+    // UP key -> Accelerate in facing direction. OK.
+    // DOWN key -> Decelerate. OK.
+    // LEFT key -> Rotate Counter-Clockwise. OK.
+    // RIGHT key -> Rotate Clockwise. OK.
+    // So existing control logic is actually fine as long as initial state is correct.
+
     if (!this.player.active) {
       this.statusText.setText('System: CRITICAL FAILURE (Player Destroyed)');
       return;
@@ -201,6 +246,10 @@ export class CombatPrototypeScene extends Phaser.Scene {
     }
 
     // --- AI Updates ---
+    // Restore Mothership Behavior
+    // We handle mothership distinctly or just treat it as a heavy drone?
+    // Let's modify updateAI to handle it.
+
     this.updateAI(this.friendlies, this.enemies.getChildren(), time);
     // Enemies target Player + Friendlies
     const allEnemies: Phaser.GameObjects.GameObject[] = [
@@ -209,7 +258,6 @@ export class CombatPrototypeScene extends Phaser.Scene {
     ].filter((e) => e.active);
     this.updateAI(this.enemies, allEnemies, time);
 
-    // --- Cleanup ---
     // --- Cleanup ---
     this.lasers.getChildren().forEach((l: Phaser.GameObjects.GameObject) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -221,6 +269,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
         }
       }
     });
+
+    // Update Minimap Position (optional, or keep static full view)
+    // If map is static full view no update needed.
   }
 
   private updateAI(
@@ -231,7 +282,8 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     group.getChildren().forEach((entity: any) => {
       if (!entity.active) return;
-      if (entity.getData('type') === 'mother') return; // Mothership is static turret
+
+      const isMother = entity.getData('type') === 'mother';
 
       // 1. Acquire Target
       let target = entity.getData('target');
@@ -245,26 +297,56 @@ export class CombatPrototypeScene extends Phaser.Scene {
         const dist = Phaser.Math.Distance.Between(entity.x, entity.y, target.x, target.y);
         const angle = Phaser.Math.Angle.Between(entity.x, entity.y, target.x, target.y);
 
-        entity.setRotation(angle);
-
-        // Maintains distance 200-400
-        if (dist > 400) {
-          this.physics.velocityFromRotation(angle, this.SPEED_DRONE_MAX, entity.body.acceleration);
-        } else if (dist < 200) {
-          this.physics.velocityFromRotation(
-            angle,
-            -this.SPEED_DRONE_MAX * 0.5,
-            entity.body.acceleration
-          );
+        // Mothership turns slowly
+        if (isMother) {
+          // Simple gradual turn
+          // entity.rotation = Phaser.Math.Angle.RotateTo(entity.rotation, angle, 0.01);
+          // For physics consistency, let's just snap rotation for now or use angular velocity?
+          // Let's just set rotation to face target for accuracy
+          entity.setRotation(angle);
         } else {
-          entity.setAcceleration(0);
+          entity.setRotation(angle);
+        }
+
+        if (isMother) {
+          // Mothership Logic:
+          // Stay distant. If too close, maybe back up? Or just sit there?
+          // "Restore behavior" -> user likely wants it to move/engage.
+          // Let's make it slowly move towards optimal range (800)
+          if (dist > 800) {
+            this.physics.velocityFromRotation(angle, 30, entity.body.acceleration);
+          } else if (dist < 400) {
+            this.physics.velocityFromRotation(angle, -10, entity.body.acceleration);
+          } else {
+            entity.setAcceleration(0);
+          }
+        } else {
+          // Drone Logic (Orbit 200-400)
+          if (dist > 400) {
+            this.physics.velocityFromRotation(
+              angle,
+              this.SPEED_DRONE_MAX,
+              entity.body.acceleration
+            );
+          } else if (dist < 200) {
+            this.physics.velocityFromRotation(
+              angle,
+              -this.SPEED_DRONE_MAX * 0.5,
+              entity.body.acceleration
+            );
+          } else {
+            entity.setAcceleration(0);
+          }
         }
 
         // Fire
-        if (dist < 600) {
+        const range = isMother ? 1000 : 600;
+        if (dist < range) {
           const lastFired = entity.getData('lastFired') || 0;
-          if (time > lastFired + 1000) {
-            // 1 sec cooldown
+          // Mothership fires faster? Or same? Let's say slightly faster 800ms
+          const cooldown = isMother ? 800 : 1000;
+
+          if (time > lastFired + cooldown) {
             if (Math.random() < 0.5) {
               this.fireLaser(entity);
               entity.setData('lastFired', time);
