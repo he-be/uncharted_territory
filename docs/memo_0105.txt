@@ -1,0 +1,7 @@
+~/dev/avatar-ui-core は、AIキャラクターの発話を表示するUIコンポーネントのプロジェクト。
+このプロジェクトはPythonを使っているため、そのままこのuncharted_territoryプロジェクトに組み込むことは難しい。
+avatar-ui-coreの内容を読み込み、このプロジェクト内でさまざまな場所でUI要素として利用したいので、このプロジェクトに統合して。
+また、画像は、　/Users/mh/dev/uncharted_territory/public/assets/c_alva_idle.png
+/Users/mh/dev/uncharted_territory/public/assets/c_alva_talk.png
+この二つを使用する必要がある。名前は A.L.V.A. と表示する。UIは日本語表示を前提に作成する。
+このプロジェクトに統合できたら、今の2D戦闘ミニゲームに組み込んでデモして。

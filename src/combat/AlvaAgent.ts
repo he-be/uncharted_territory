@@ -1,4 +1,4 @@
-import { DialogueOverlay } from '../ui/DialogueOverlay';
+import { AvatarSystem } from '../ui/AvatarSystem';
 
 interface GameState {
   playerHealth: number;
@@ -18,7 +18,7 @@ interface TriggerEvent {
 }
 
 export class AlvaAgent {
-  private overlay: DialogueOverlay;
+  private avatar: AvatarSystem;
   private state: GameState;
   private history: string[] = []; // Recent event history
   private lastCommentaryTime: number = 0;
@@ -31,8 +31,8 @@ export class AlvaAgent {
 
   private currentPhase: string = 'DEPLOYMENT';
 
-  constructor(overlay: DialogueOverlay) {
-    this.overlay = overlay;
+  constructor(avatar: AvatarSystem) {
+    this.avatar = avatar;
     this.apiKey = import.meta.env.OPENROUTER_API_KEY || ''; // Exposed via vite.config.ts
 
     this.state = {
@@ -46,9 +46,9 @@ export class AlvaAgent {
     };
 
     if (!this.apiKey) {
-      this.overlay.addMessage('SYSTEM: OPENROUTER_API_KEY not found.');
+      this.avatar.log('SYSTEM: OPENROUTER_API_KEY not found.', 'system');
     } else {
-      this.overlay.addMessage('SYSTEM: A.L.V.A. Online.');
+      this.avatar.log('SYSTEM: A.L.V.A. Online.', 'system');
     }
   }
 
@@ -152,7 +152,7 @@ export class AlvaAgent {
       }
     } catch (e) {
       console.error('ALVA Generation Failed:', e);
-      this.overlay.addMessage(`SYSTEM: Connection Error (${e})`);
+      this.avatar.log(`SYSTEM: Connection Error (${e})`, 'system');
     } finally {
       this.pendingRequest = false;
     }
@@ -231,7 +231,8 @@ ${contextJson}
       // Pick one randomly or simply the first
       const selected = lines[Math.floor(Math.random() * lines.length)];
 
-      this.overlay.addMessage(`A.L.V.A: ${selected}`);
+      // Use speak for AI voice
+      this.avatar.speak(selected);
 
       // Update timestamps
       const now = Date.now();

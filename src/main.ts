@@ -5,6 +5,7 @@ import { UIScene } from './scenes/UIScene';
 import { CombatMenuScene } from './scenes/CombatMenuScene';
 import { CombatPrototypeScene } from './scenes/CombatPrototypeScene';
 import './style.css';
+import './styles/avatar.css';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

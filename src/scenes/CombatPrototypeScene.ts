@@ -3,7 +3,7 @@ import { CombatAI } from './combat/CombatAI';
 import { CombatMinimap } from './combat/CombatMinimap';
 import { CombatModuleManager } from './combat/structure/ModuleManager';
 import { AlvaAgent } from '../combat/AlvaAgent';
-import { DialogueOverlay } from '../ui/DialogueOverlay';
+import { AvatarSystem } from '../ui/AvatarSystem';
 import { ResultOverlay } from '../ui/ResultOverlay';
 import { TextStyles } from '../ui/FontConfig';
 import type { ModuleConfig } from './combat/structure/CombatStructure';
@@ -278,9 +278,9 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // 8. UI & Minimap
     this.createUI();
-    const overlay = new DialogueOverlay();
+    const avatar = new AvatarSystem();
     this.resultOverlay = new ResultOverlay();
-    this.alvaAgent = new AlvaAgent(overlay);
+    this.alvaAgent = new AlvaAgent(avatar);
     this.minimapSystem.create([
       this.hpText,
       this.statusText,
