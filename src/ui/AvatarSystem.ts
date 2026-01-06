@@ -1,3 +1,5 @@
+export type AvatarEmotion = 'normal' | 'worried' | 'angry';
+
 export class AvatarSystem {
   private container!: HTMLElement;
   private output!: HTMLElement;
@@ -6,9 +8,15 @@ export class AvatarSystem {
   private talkingInterval: any = null;
   private isMouthOpen: boolean = false;
 
-  // Update paths to correspond to public assets
-  private readonly IDLE_IMG = '/assets/c_alva_idle.png';
-  private readonly TALK_IMG = '/assets/c_alva_talk.png';
+  // Emotion State
+  private currentEmotion: AvatarEmotion = 'normal';
+
+  private readonly ASSETS: Record<AvatarEmotion, { idle: string; talk: string }> = {
+    normal: { idle: '/assets/c_alva_no_1.png', talk: '/assets/c_alva_no_2.png' },
+    worried: { idle: '/assets/c_alva_no_3.png', talk: '/assets/c_alva_no_4.png' },
+    angry: { idle: '/assets/c_alva_no_5.png', talk: '/assets/c_alva_no_6.png' },
+  };
+
   private readonly NAME = 'A.L.V.A.';
 
   private audioCtx: AudioContext | null = null;
@@ -89,7 +97,7 @@ export class AvatarSystem {
 
     const html = `
       <div class="avatar-area">
-        <img id="avatar-img" src="${this.IDLE_IMG}" alt="${this.NAME}">
+        <img id="avatar-img" src="${this.ASSETS.normal.idle}" alt="${this.NAME}">
         <div class="avatar-label">${this.NAME}</div>
       </div>
       <div class="chat-area">
@@ -139,12 +147,20 @@ export class AvatarSystem {
     this.output.scrollTop = this.output.scrollHeight;
   }
 
+  public setEmotion(emotion: AvatarEmotion) {
+    this.currentEmotion = emotion;
+    if (!this.talkingInterval && this.avatarImg) {
+      this.avatarImg.src = this.ASSETS[this.currentEmotion].idle;
+    }
+  }
+
   private startTalking() {
     if (this.talkingInterval) return;
     this.isMouthOpen = false;
     this.talkingInterval = setInterval(() => {
       this.isMouthOpen = !this.isMouthOpen;
-      this.avatarImg.src = this.isMouthOpen ? this.TALK_IMG : this.IDLE_IMG;
+      const set = this.ASSETS[this.currentEmotion];
+      this.avatarImg.src = this.isMouthOpen ? set.talk : set.idle;
     }, 150);
   }
 
@@ -154,7 +170,7 @@ export class AvatarSystem {
       this.talkingInterval = null;
     }
     if (this.avatarImg) {
-      this.avatarImg.src = this.IDLE_IMG;
+      this.avatarImg.src = this.ASSETS[this.currentEmotion].idle;
     }
   }
 

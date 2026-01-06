@@ -1,0 +1,9 @@
+ALVAの表情を追加し、アセットを描き直した。
+状況に応じて感情を適切に選択し、今までと同様に2枚の画像を切り替えてしゃべっている演出を実現して。
+戦闘ミニゲームのデモで、ゲームプレイ内で一通り確認できるようにして
+c_alva_no_1.png idle/fun - closed mouth 
+c_alva_no_2.png idle/fun - open mouth 
+c_alva_no_3.png sad/worried - closed mouth 
+c_alva_no_4.png sad/worried - open mouth 
+c_alva_no_5.png angry - closed mouth 
+c_alva_no_6.png angry - open mouth
