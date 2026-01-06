@@ -24,6 +24,7 @@ export class AvatarSystem {
 
   constructor() {
     this.createDOM();
+    this.preloadImages();
     // Init audio context
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const WinAudio = window.AudioContext || (window as any).webkitAudioContext;
@@ -31,6 +32,15 @@ export class AvatarSystem {
       this.audioCtx = new WinAudio();
       this.generateBeepBuffer();
     }
+  }
+
+  private preloadImages() {
+    Object.values(this.ASSETS).forEach((set) => {
+      const img1 = new Image();
+      img1.src = set.idle;
+      const img2 = new Image();
+      img2.src = set.talk;
+    });
   }
 
   private generateBeepBuffer() {
