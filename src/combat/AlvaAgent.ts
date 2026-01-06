@@ -1,4 +1,4 @@
-import { AvatarSystem } from '../ui/AvatarSystem';
+import { AvatarSystem, type AvatarEmotion } from '../ui/AvatarSystem';
 
 interface GameState {
   playerHealth: number;
@@ -55,6 +55,7 @@ export class AlvaAgent {
   public updateState(partialState: Partial<GameState>) {
     this.state = { ...this.state, ...partialState };
     this.checkPhaseChange();
+    this.updateEmotion();
   }
 
   private checkPhaseChange() {
@@ -92,6 +93,38 @@ export class AlvaAgent {
         });
       }
     }
+  }
+
+  private updateEmotion() {
+    let emotion: AvatarEmotion = 'normal';
+
+    // 1. Critical Health or high danger -> Worried
+    // Only worry about enemy count if we are closer (SKIRMISH/MELEE)
+    const isEngagement = this.currentPhase === 'SKIRMISH' || this.currentPhase === 'MELEE';
+
+    if (this.state.playerHealth < 50) {
+      emotion = 'worried';
+    } else if (isEngagement && this.state.enemiesNearby > 10) {
+      emotion = 'worried';
+    }
+
+    // 2. Taking Damage logic (handled in reportEvent ideally, but state reflection is good)
+    // Actually, if battle is intense (Melee) -> Angry/Serious?
+    if (this.currentPhase === 'MELEE') {
+      // If losing, worried. If winning or fighting hard, angry?
+      // Let's say MELEE is Angry unless low health.
+      if (this.state.playerHealth >= 50) {
+        emotion = 'angry';
+      }
+    }
+
+    // 3. Victory -> Happy (Normal?) or maybe we add 'happy' later.
+    // For now 'normal' is fine for victory.
+    if (this.currentPhase === 'VICTORY') {
+      emotion = 'normal';
+    }
+
+    this.avatar.setEmotion(emotion);
   }
 
   public reportEvent(event: TriggerEvent) {
@@ -238,6 +271,14 @@ ${contextJson}
       const now = Date.now();
       this.lastCommentaryTime = now;
       this.categoryCooldowns.set(type, now);
+
+      // Force emotion based on event type temporarily?
+      if (type === 'enemy_killed') {
+        this.avatar.setEmotion('angry');
+        // Will be reset by update loop next frame, which is fine
+      } else if (type === 'damage_taken') {
+        this.avatar.setEmotion('worried');
+      }
     }
   }
 }

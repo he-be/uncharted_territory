@@ -575,6 +575,36 @@ export class CombatPrototypeScene extends Phaser.Scene {
       if (this.hpText) minicam.ignore(this.hpText);
       if (this.statusText) minicam.ignore(this.statusText);
     }
+
+    // --- Update Alva Agent ---
+    if (this.alvaAgent) {
+      // Calculate Visible Enemies (On Screen)
+      const camera = this.cameras.main;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const visibleEnemies = this.enemies.getChildren().filter((enemy: any) => {
+        return enemy.active && camera.worldView.contains(enemy.x, enemy.y);
+      }).length;
+
+      // Calculate Nearest Enemy Distance
+      let nearestDist = 99999;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.enemies.getChildren().forEach((enemy: any) => {
+        if (enemy.active) {
+          const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+          if (d < nearestDist) nearestDist = d;
+        }
+      });
+
+      const hp = this.player.getData('hp') || 100;
+
+      this.alvaAgent.updateState({
+        playerHealth: hp,
+        enemiesNearby: visibleEnemies, // Use visible count for "Nearby"
+        battleDuration: time / 1000,
+        nearestEnemyDist: nearestDist,
+        // Momentum could be calculated based on kills vs damage taken, sticking to 0 for now or implementing later
+      });
+    }
   }
 
   // --- Collision Callbacks ---
