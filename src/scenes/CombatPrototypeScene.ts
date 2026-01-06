@@ -91,14 +91,16 @@ export class CombatPrototypeScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('player_ship', 'assets/player_ship.png');
-    this.load.image('npc_pirate', 'assets/npc_pirate.png');
-    this.load.image('npc_fighter', 'assets/drone_fighter_A.png');
-    this.load.image('projectile_laser', 'assets/projectile_laser.png');
+    this.load.image('player_ship', 'assets/images/player_ship.png');
+    this.load.image('npc_pirate', 'assets/images/npc_pirate.png');
+    this.load.image('npc_fighter', 'assets/images/drone_fighter_A.png');
+    this.load.image('projectile_laser', 'assets/images/projectile_laser.png');
   }
 
   create() {
     console.log('[CombatPrototypeScene] Created (Modular)');
+    // keep audio running when window loses focus
+    this.sound.pauseOnBlur = false;
 
     // Generate PD texture if missing (Yellow Bar)
     if (!this.textures.exists('projectile_pd')) {
@@ -278,7 +280,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
 
     // 8. UI & Minimap
     this.createUI();
-    const avatar = new AvatarSystem();
+    const avatar = new AvatarSystem(this);
     this.resultOverlay = new ResultOverlay();
     this.alvaAgent = new AlvaAgent(avatar);
     this.minimapSystem.create([

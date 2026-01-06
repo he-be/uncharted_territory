@@ -12,35 +12,51 @@ export class AvatarSystem {
   private currentEmotion: AvatarEmotion = 'normal';
 
   private readonly ASSETS: Record<AvatarEmotion, { idle: string; talk: string }> = {
-    normal: { idle: '/assets/c_alva_no_1.png', talk: '/assets/c_alva_no_2.png' },
-    worried: { idle: '/assets/c_alva_no_3.png', talk: '/assets/c_alva_no_4.png' },
-    angry: { idle: '/assets/c_alva_no_5.png', talk: '/assets/c_alva_no_6.png' },
+    normal: { idle: '/assets/ui/c_alva_no_1.png', talk: '/assets/ui/c_alva_no_2.png' },
+    worried: { idle: '/assets/ui/c_alva_no_3.png', talk: '/assets/ui/c_alva_no_4.png' },
+    angry: { idle: '/assets/ui/c_alva_no_5.png', talk: '/assets/ui/c_alva_no_6.png' },
   };
 
   private readonly NAME = 'A.L.V.A.';
 
-  private audioCtx: AudioContext | null = null;
   private beepBuffer: AudioBuffer | null = null;
+  private audioCtx: AudioContext | null = null;
+  private scene: Phaser.Scene | null = null;
 
-  constructor() {
-    this.createDOM();
-    this.preloadImages();
-    // Init audio context
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const WinAudio = window.AudioContext || (window as any).webkitAudioContext;
-    if (WinAudio) {
-      this.audioCtx = new WinAudio();
+  constructor(scene?: Phaser.Scene) {
+    if (scene) {
+      this.scene = scene;
+      console.log('[AvatarSystem] Initialized with Phaser Scene');
+    } else {
+      console.warn('[AvatarSystem] No scene provided. Fallback mode.');
+      this.initAudio();
+    }
+
+    if (this.scene) {
+      if (this.scene.sound && this.scene.sound instanceof Phaser.Sound.WebAudioSoundManager) {
+        this.audioCtx = this.scene.sound.context;
+        this.generateBeepBuffer();
+        // Register to Phaser Cache
+        if (this.beepBuffer && !this.scene.cache.audio.exists('alva_beep')) {
+          this.scene.cache.audio.add('alva_beep', this.beepBuffer);
+          // console.log('[AvatarSystem] Registered beep to Phaser Cache');
+        }
+      }
+    } else if (this.audioCtx) {
       this.generateBeepBuffer();
     }
-  }
 
-  private preloadImages() {
-    Object.values(this.ASSETS).forEach((set) => {
-      const img1 = new Image();
-      img1.src = set.idle;
-      const img2 = new Image();
-      img2.src = set.talk;
-    });
+    this.createDOM();
+    this.preloadImages();
+
+    // Legacy fallback listeners only if no scene
+    if (!this.scene) {
+      const resumeHandler = () => {
+        this.resumeAudio();
+      };
+      document.addEventListener('click', resumeHandler);
+      document.addEventListener('keydown', resumeHandler);
+    }
   }
 
   private generateBeepBuffer() {
@@ -56,16 +72,88 @@ export class AvatarSystem {
     // Fill with square wave + decay
     for (let i = 0; i < frames; i++) {
       const t = i / sampleRate;
-      // Frequency 600Hz
-      const freq = 600;
+      // Frequency 800Hz
+      const freq = 800;
       const val = Math.sign(Math.sin(2 * Math.PI * freq * t));
 
       // Linear decay for volume
-      const volume = 0.05 * (1 - i / frames);
+      const volume = 0.5 * (1 - i / frames); // 0.5 Max Volume
       data[i] = val * volume;
     }
 
     this.beepBuffer = buffer;
+  }
+
+  private initAudio() {
+    if (this.audioCtx) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const WinAudio = window.AudioContext || (window as any).webkitAudioContext;
+    if (WinAudio) {
+      try {
+        this.audioCtx = new WinAudio();
+        this.generateBeepBuffer();
+      } catch (e) {
+        console.error('[AvatarSystem] Init failed:', e);
+      }
+    }
+  }
+
+  private resumeAudio() {
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+  }
+
+  private preloadImages() {
+    Object.values(this.ASSETS).forEach((set) => {
+      const img1 = new Image();
+      img1.src = set.idle;
+      const img2 = new Image();
+      img2.src = set.talk;
+    });
+  }
+
+  private playBeep() {
+    // 1. Phaser Native Way (Best Stability)
+    if (this.scene) {
+      try {
+        // Check if sound exists in cache, if not try to re-add
+        if (!this.scene.cache.audio.exists('alva_beep') && this.beepBuffer) {
+          this.scene.cache.audio.add('alva_beep', this.beepBuffer);
+        }
+
+        // Play using Phaser Sound Manager
+        this.scene.sound.play('alva_beep', { volume: 0.5 });
+        return;
+      } catch (e) {
+        console.warn('[AvatarSystem] Phaser play failed, fallback:', e);
+      }
+    }
+
+    // 2. Fallback Raw Context Way
+    if (!this.audioCtx) {
+      this.initAudio();
+    }
+
+    if (this.audioCtx && !this.beepBuffer) {
+      this.generateBeepBuffer();
+    }
+
+    if (!this.audioCtx || !this.beepBuffer) return;
+
+    if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+
+    try {
+      const source = this.audioCtx.createBufferSource();
+      source.buffer = this.beepBuffer;
+      source.connect(this.audioCtx.destination);
+      source.start();
+    } catch (e) {
+      // console.error('[AvatarSystem] PlayBeep error:', e);
+    }
   }
 
   public log(text: string, type: 'system' | 'user' | 'ai' = 'system') {
@@ -142,6 +230,7 @@ export class AvatarSystem {
   }
 
   public async speak(text: string) {
+    console.log('[AvatarSystem] speak() called:', text);
     this.show();
     const line = document.createElement('div');
     line.className = 'line ai';
@@ -184,44 +273,53 @@ export class AvatarSystem {
     }
   }
 
-  private playBeep() {
-    if (!this.audioCtx || !this.beepBuffer) return;
-    if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume().catch(() => {});
-    }
-
-    try {
-      const source = this.audioCtx.createBufferSource();
-      source.buffer = this.beepBuffer;
-      source.connect(this.audioCtx.destination);
-      source.start();
-    } catch {
-      // Ignore audio errors
-    }
-  }
-
   private typeWriter(element: HTMLElement, text: string): Promise<void> {
     return new Promise((resolve) => {
       let i = 0;
       const speed = 30; // ms per char
 
-      const tick = () => {
-        if (i < text.length) {
-          const char = text.charAt(i);
-          element.textContent += char;
+      // Use Phaser Timer if available for better stability in background (pauseOnBlur: false)
+      if (this.scene) {
+        const timer = this.scene.time.addEvent({
+          delay: speed,
+          loop: true,
+          callback: () => {
+            if (i < text.length) {
+              const char = text.charAt(i);
+              element.textContent += char;
 
-          if (char !== ' ' && char !== '\n') {
-            this.playBeep();
+              if (char !== ' ' && char !== '\n') {
+                this.playBeep();
+              }
+
+              i++;
+              this.output.scrollTop = this.output.scrollHeight;
+            } else {
+              timer.remove();
+              resolve();
+            }
+          },
+        });
+      } else {
+        // Fallback for no-scene context
+        const tick = () => {
+          if (i < text.length) {
+            const char = text.charAt(i);
+            element.textContent += char;
+
+            if (char !== ' ' && char !== '\n') {
+              this.playBeep();
+            }
+
+            i++;
+            this.output.scrollTop = this.output.scrollHeight;
+            setTimeout(tick, speed);
+          } else {
+            resolve();
           }
-
-          i++;
-          this.output.scrollTop = this.output.scrollHeight;
-          setTimeout(tick, speed);
-        } else {
-          resolve();
-        }
-      };
-      tick();
+        };
+        tick();
+      }
     });
   }
 }

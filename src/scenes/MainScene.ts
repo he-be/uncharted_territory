@@ -59,22 +59,22 @@ export class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('ship', 'assets/player_ship.png');
-    this.load.image('station', 'assets/station_trade.png');
-    this.load.image('station_factory', 'assets/station_factory.png');
-    this.load.image('station_mining', 'assets/station_mining.png');
-    this.load.image('station_industry', 'assets/station_industry.png');
-    this.load.image('station_equipments', 'assets/station_equipments.png');
-    this.load.image('station_shipyard', 'assets/station_shipyard.png');
-    this.load.image('npc_trader', 'assets/npc_trader_B.png'); // Default (Empty)
-    this.load.image('npc_trader_full', 'assets/npc_trader_A.png'); // Loaded
-    this.load.image('npc_pirate', 'assets/npc_pirate.png');
-    this.load.image('npc_fighter', 'assets/npc_fighter.png');
-    this.load.image('gate', 'assets/gate.png');
-    this.load.image('asteroid', 'assets/asteroid.png');
-    this.load.image('kraken', 'assets/kraken.png');
-    this.load.image('projectile_laser', 'assets/projectile_laser.png');
-    this.load.image('effect_shield', 'assets/effect_shield.png');
+    this.load.image('ship', 'assets/images/player_ship.png');
+    this.load.image('station', 'assets/images/station_trade.png');
+    this.load.image('station_factory', 'assets/images/station_factory.png');
+    this.load.image('station_mining', 'assets/images/station_mining.png');
+    this.load.image('station_industry', 'assets/images/station_industry.png');
+    this.load.image('station_equipments', 'assets/images/station_equipments.png');
+    this.load.image('station_shipyard', 'assets/images/station_shipyard.png');
+    this.load.image('npc_trader', 'assets/images/npc_trader_B.png'); // Default (Empty)
+    this.load.image('npc_trader_full', 'assets/images/npc_trader_A.png'); // Loaded
+    this.load.image('npc_pirate', 'assets/images/npc_pirate.png');
+    this.load.image('npc_fighter', 'assets/images/npc_fighter.png');
+    this.load.image('gate', 'assets/images/gate.png');
+    this.load.image('asteroid', 'assets/images/asteroid.png');
+    this.load.image('kraken', 'assets/images/kraken.png');
+    this.load.image('projectile_laser', 'assets/images/projectile_laser.png');
+    this.load.image('effect_shield', 'assets/images/effect_shield.png');
   }
 
   create() {

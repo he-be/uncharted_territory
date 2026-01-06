@@ -16,17 +16,12 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .idea
+# OS
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db
 
-# Testing
-coverage
+# Build
+*.tsbuildinfo
 
-# Env
-.env
-.env.local
-.env.*
+# Junk
+public/assets/old/

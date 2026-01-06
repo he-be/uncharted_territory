@@ -30,6 +30,10 @@ const config: Phaser.Types.Core.GameConfig = {
     pixelArt: false,
     roundPixels: false,
   },
+  audio: {
+    disableWebAudio: false,
+    noAudio: false,
+  },
 };
 
 console.log('[Main] Starting Game...');

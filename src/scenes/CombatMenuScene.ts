@@ -50,7 +50,18 @@ export class CombatMenuScene extends Phaser.Scene {
     super({ key: 'CombatMenuScene' });
   }
 
+  preload() {
+    this.load.audio('bgm_briefing', 'assets/audio/mission_briefing_2.mp3');
+  }
+
   create() {
+    // Play BGM
+    if (!this.sound.get('bgm_briefing')) {
+      this.sound.play('bgm_briefing', { loop: true, volume: 0.5 });
+    } else if (!this.sound.get('bgm_briefing').isPlaying) {
+      this.sound.play('bgm_briefing', { loop: true, volume: 0.5 });
+    }
+
     const { width, height } = this.scale;
 
     // Force hide HTML UI layer defined in index.html
@@ -65,6 +76,15 @@ export class CombatMenuScene extends Phaser.Scene {
         fontSize: '48px',
         color: '#00ff00',
         fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    // Status text for Audio Check
+    this.add
+      .text(width / 2, height * 0.95, 'Audio Check: BGM Playing...', {
+        fontFamily: FontConfig.familyUI,
+        fontSize: '16px',
+        color: '#00ffff',
       })
       .setOrigin(0.5);
 
@@ -110,6 +130,9 @@ export class CombatMenuScene extends Phaser.Scene {
       height * 0.85,
       'ENGAGE SYSTEMS',
       () => {
+        // Do NOT stop BGM to keep AudioContext active
+        // this.sound.stopAll();
+
         const modules: ModuleConfig[] = this.buildLoadout();
         this.scene.start('CombatPrototypeScene', {
           playerModules: modules,
