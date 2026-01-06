@@ -142,6 +142,17 @@ export class CombatMenuScene extends Phaser.Scene {
       },
       '#ff0000'
     );
+
+    // Back Button
+    this.createButton(
+      width / 2,
+      height * 0.92,
+      '< BACK',
+      () => {
+        this.scene.start('TitleScene');
+      },
+      '#aaaaaa'
+    );
   }
 
   private buildLoadout(): ModuleConfig[] {

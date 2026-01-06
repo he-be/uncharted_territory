@@ -281,6 +281,7 @@ export class CombatPrototypeScene extends Phaser.Scene {
     // 8. UI & Minimap
     this.createUI();
     const avatar = new AvatarSystem(this);
+    avatar.clear(); // Clear previous session data
     this.resultOverlay = new ResultOverlay();
     this.alvaAgent = new AlvaAgent(avatar);
     this.minimapSystem.create([
@@ -471,12 +472,10 @@ export class CombatPrototypeScene extends Phaser.Scene {
       };
 
       this.resultOverlay.show(stats, () => {
-        // Return to Title (or reload for now since Title scene might not exist or be named 'Menu')
-        // Just reload page for simple loop or go to Menu if exists.
-        // User asked for "Title", assume 'TitleScene' or just reload.
-        // Let's console log and reload for prototype safety.
-        console.log('Returning to Base...');
-        window.location.reload();
+        this.resultOverlay.hide();
+        // Stop battle music or sounds if needed
+        this.sound.stopAll();
+        this.scene.start('TitleScene');
       });
     }
 

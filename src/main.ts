@@ -4,6 +4,8 @@ import { SectorMapScene } from './scenes/SectorMapScene';
 import { UIScene } from './scenes/UIScene';
 import { CombatMenuScene } from './scenes/CombatMenuScene';
 import { CombatPrototypeScene } from './scenes/CombatPrototypeScene';
+import { TitleScene } from './scenes/TitleScene';
+import { ConversationScene } from './scenes/ConversationScene';
 import './style.css';
 import './styles/avatar.css';
 
@@ -20,7 +22,15 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [CombatMenuScene, CombatPrototypeScene, MainScene, SectorMapScene, UIScene],
+  scene: [
+    TitleScene,
+    ConversationScene,
+    CombatMenuScene,
+    CombatPrototypeScene,
+    MainScene,
+    SectorMapScene,
+    UIScene,
+  ],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,

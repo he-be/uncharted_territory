@@ -2,10 +2,15 @@ export class ResultOverlay {
   private container: HTMLDivElement;
 
   constructor() {
-    this.container = document.createElement('div');
-    this.container.id = 'result-overlay';
-    this.container.style.display = 'none';
-    document.body.appendChild(this.container);
+    const existing = document.getElementById('result-overlay');
+    if (existing) {
+      this.container = existing as HTMLDivElement;
+    } else {
+      this.container = document.createElement('div');
+      this.container.id = 'result-overlay';
+      this.container.style.display = 'none';
+      document.body.appendChild(this.container);
+    }
   }
 
   public show(stats: { time: number; enemiesDefeated: number }, onReturn: () => void) {

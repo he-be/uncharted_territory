@@ -56,6 +56,12 @@ export class AvatarSystem {
       };
       document.addEventListener('click', resumeHandler);
       document.addEventListener('keydown', resumeHandler);
+    } else {
+      // Auto-cleanup on scene shutdown
+      this.scene.events.on('shutdown', () => {
+        this.hide();
+        this.stopTalking();
+      });
     }
   }
 
